@@ -1,0 +1,184 @@
+---
+title: VLM Pipeline
+description: Convert documents using Vision-Language Models for enhanced understanding
+---
+
+Use Vision-Language Models (VLMs) to convert PDFs with enhanced understanding of layout, text, and visual elements.
+
+## Overview
+
+The VLM pipeline uses state-of-the-art vision-language models to process documents. This example shows:
+- Default VLM configuration (simplest approach)
+- Using model presets
+- Runtime overrides for different hardware (MLX, Transformers)
+- Automatic hardware selection
+
+## Simple VLM Conversion
+
+```python minimal_vlm_pipeline.py
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.pipeline.vlm_pipeline import VlmPipeline
+
+# Convert a public arXiv PDF
+source = "https://arxiv.org/pdf/2501.17887"
+
+# Default configuration - uses GraniteDocling model
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_cls=VlmPipeline,
+        ),
+    }
+)
+
+doc = converter.convert(source=source).document
+print(doc.export_to_markdown())
+```
+
+<Note>
+  The default VLM configuration uses the GraniteDocling model and automatically selects the best runtime for your platform.
+</Note>
+
+## Using Presets
+
+<Steps>
+  <Step title="Import VLM Options">
+    Import `VlmConvertOptions` and `VlmPipelineOptions`.
+  </Step>
+  
+  <Step title="Create Preset Configuration">
+    Use `VlmConvertOptions.from_preset()` with a preset name.
+  </Step>
+  
+  <Step title="Configure Pipeline">
+    Pass VLM options to the pipeline configuration.
+  </Step>
+</Steps>
+
+```python
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    VlmConvertOptions,
+    VlmPipelineOptions,
+)
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.pipeline.vlm_pipeline import VlmPipeline
+
+source = "https://arxiv.org/pdf/2501.17887"
+
+# Use the granite_docling preset
+vlm_options = VlmConvertOptions.from_preset("granite_docling")
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_cls=VlmPipeline,
+            pipeline_options=VlmPipelineOptions(vlm_options=vlm_options),
+        ),
+    }
+)
+
+doc = converter.convert(source=source).document
+print(doc.export_to_markdown())
+```
+
+## Runtime Overrides
+
+<CodeGroup>
+
+```python Default (Auto-select)
+# Automatically selects best runtime for your platform
+vlm_options = VlmConvertOptions.from_preset("granite_docling")
+```
+
+```python MLX Runtime (Apple Silicon)
+from docling.datamodel.vlm_engine_options import (
+    MlxVlmEngineOptions,
+    VlmEngineType,
+)
+
+# Use MLX runtime for Apple Silicon (M1/M2/M3)
+vlm_options = VlmConvertOptions.from_preset(
+    "granite_docling",
+    engine_options=MlxVlmEngineOptions(),
+)
+
+# The preset automatically selects the MLX-optimized model variant
+print(f"Using model: {vlm_options.model_spec.get_repo_id(VlmEngineType.MLX)}")
+```
+
+```python Transformers Runtime
+from docling.datamodel.vlm_engine_options import TransformersVlmEngineOptions
+
+# Use Transformers runtime (works on CPU/CUDA/MPS)
+vlm_options = VlmConvertOptions.from_preset(
+    "granite_docling",
+    engine_options=TransformersVlmEngineOptions(),
+)
+```
+
+</CodeGroup>
+
+## Available Presets
+
+Docling provides several VLM model presets:
+
+- **granite_docling**: Default GraniteDocling model (recommended)
+- Additional presets may be available - check the documentation
+
+## Complete Example with MLX
+
+```python
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    VlmConvertOptions,
+    VlmPipelineOptions,
+)
+from docling.datamodel.vlm_engine_options import (
+    MlxVlmEngineOptions,
+    VlmEngineType,
+)
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.pipeline.vlm_pipeline import VlmPipeline
+
+source = "https://arxiv.org/pdf/2501.17887"
+
+# Configure MLX runtime for Apple Silicon
+vlm_options = VlmConvertOptions.from_preset(
+    "granite_docling",
+    engine_options=MlxVlmEngineOptions(),
+)
+
+print(f"Using model: {vlm_options.model_spec.get_repo_id(VlmEngineType.MLX)}")
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_cls=VlmPipeline,
+            pipeline_options=VlmPipelineOptions(vlm_options=vlm_options),
+        ),
+    }
+)
+
+doc = converter.convert(source=source).document
+print(doc.export_to_markdown())
+```
+
+## Requirements
+
+- Python 3.9+
+- `docling` with VLM extras: `pip install docling[vlm]`
+- For Transformers backend: `pip install transformers`
+- For MLX backend (Apple Silicon): `pip install mlx mlx-whisper`
+- Network access to download model weights from Hugging Face
+
+## Hardware Recommendations
+
+- **Apple Silicon (M1/M2/M3)**: Use MLX runtime for optimized performance
+- **NVIDIA GPUs**: Use Transformers runtime with CUDA
+- **CPU only**: Use Transformers runtime (slower but works)
+
+<Note>
+  VLM models require downloading weights on first use. Ensure you have network access and sufficient disk space.
+</Note>

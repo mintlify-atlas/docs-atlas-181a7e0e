@@ -1,0 +1,420 @@
+---
+title: Image Backend
+description: Image file processing and OCR pipeline
+---
+
+## Overview
+
+The Image backend (`ImageDocumentBackend`) processes standalone image files (JPEG, PNG, TIFF, etc.) by treating them as single-page or multi-page documents. Images are processed through the PDF pipeline with OCR and layout analysis to extract text and structure.
+
+## Features
+
+- **Multi-format support** - JPEG, PNG, TIFF, BMP, WEBP, HEIC, GIF, ICO
+- **Multi-page TIFF** - Handles multi-frame TIFF files
+- **Thread-safe processing** - Eager frame extraction for parallel processing
+- **OCR integration** - Automatic text extraction via pipeline
+- **Layout analysis** - Structure detection using layout models
+- **Table extraction** - Detects and extracts tables from images
+- **No PDF conversion** - Native image processing without intermediate PDF
+
+## Supported Formats
+
+<CardGroup cols={2}>
+  <Card title="Single-frame formats">
+    - JPEG (.jpg, .jpeg)
+    - PNG (.png)
+    - BMP (.bmp)
+    - WEBP (.webp)
+    - HEIC (.heic)
+  </Card>
+  
+  <Card title="Multi-frame formats">
+    - TIFF (.tiff, .tif)
+    - GIF (.gif)
+    - ICO (.ico)
+  </Card>
+</CardGroup>
+
+## Usage
+
+### Basic Conversion
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("scanned_document.jpg")
+
+doc = result.document
+print(doc.export_to_markdown())
+```
+
+### With Pipeline Options
+
+```python
+from docling.document_converter import DocumentConverter, ImageFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions, EasyOcrOptions
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    do_table_structure=True,
+    ocr_options=EasyOcrOptions(lang=["en"])
+)
+
+converter = DocumentConverter(
+    format_options={
+        ImageFormatOption: ImageFormatOption(
+            pipeline_options=pipeline_options
+        )
+    }
+)
+
+result = converter.convert("scanned_page.png")
+```
+
+### Multi-page TIFF
+
+```python
+# Multi-page TIFF automatically detected
+converter = DocumentConverter()
+result = converter.convert("multi_page_scan.tif")
+
+# Each TIFF frame becomes a page
+for page in result.document.pages:
+    print(f"Page {page.page_no}: {page.size.width}x{page.size.height}")
+```
+
+## Architecture
+
+Image backend implements the paginated backend interface:
+
+```python
+from docling.backend.image_backend import ImageDocumentBackend
+
+backend = ImageDocumentBackend(
+    in_doc=input_document,
+    path_or_stream=image_path
+)
+
+# Properties
+print(f"Pages: {backend.page_count()}")
+print(f"Valid: {backend.is_valid()}")
+
+# Load individual pages
+for page_no in range(backend.page_count()):
+    page = backend.load_page(page_no)
+    img = page.get_page_image(scale=2.0)
+    page.unload()
+```
+
+### Page Backend
+
+Each page provides image access:
+
+```python
+page = backend.load_page(0)
+
+# Get page image
+img = page.get_page_image(scale=2.0)
+
+# Get page size
+size = page.get_size()
+print(f"Size: {size.width}x{size.height}")
+
+# Crop region
+from docling_core.types.doc import BoundingBox, CoordOrigin
+bbox = BoundingBox(l=100, t=100, r=400, b=300, coord_origin=CoordOrigin.TOPLEFT)
+cropped = page.get_page_image(scale=1.0, cropbox=bbox)
+
+page.unload()
+```
+
+## Pipeline Processing
+
+Images are processed through the same pipeline as PDFs:
+
+<Steps>
+  <Step title="Image Loading">
+    Image file loaded and frames extracted
+  </Step>
+  
+  <Step title="Layout Analysis">
+    Layout model detects regions (text, tables, images, etc.)
+  </Step>
+  
+  <Step title="OCR">
+    Text extracted from detected text regions
+  </Step>
+  
+  <Step title="Table Structure">
+    Tables detected and cell structure extracted
+  </Step>
+  
+  <Step title="Assembly">
+    Elements assembled into DoclingDocument
+  </Step>
+</Steps>
+
+```python
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+
+pipeline = PdfPipelineOptions(
+    do_ocr=True,               # Extract text via OCR
+    do_table_structure=True,   # Detect tables
+    images_scale=2.0,          # High resolution for OCR
+    generate_page_images=True  # Keep rendered images
+)
+```
+
+## OCR Configuration
+
+Images typically require OCR for text extraction:
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    EasyOcrOptions,
+    TesseractCliOcrOptions
+)
+
+# Using EasyOCR (recommended for images)
+options = PdfPipelineOptions(
+    do_ocr=True,
+    ocr_options=EasyOcrOptions(
+        lang=["en", "fr"],
+        use_gpu=True,
+        confidence_threshold=0.5
+    )
+)
+
+# Using Tesseract
+options = PdfPipelineOptions(
+    do_ocr=True,
+    ocr_options=TesseractCliOcrOptions(
+        lang=["eng", "fra"]
+    )
+)
+```
+
+See [OCR Options](/api/options/ocr-options) for details.
+
+## Image Resolution
+
+Higher resolution improves OCR accuracy:
+
+```python
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    images_scale=2.0,  # 2x resolution for OCR
+    ocr_options=EasyOcrOptions()
+)
+```
+
+**Recommendations:**
+- **Low quality scans**: Use `images_scale=2.0` or higher
+- **High quality images**: `images_scale=1.0` may suffice
+- **Very large images**: Consider downscaling to reduce processing time
+
+## Multi-page TIFF Handling
+
+Multi-frame TIFF files are processed with eager frame extraction:
+
+```python
+# Frames extracted on initialization
+backend = ImageDocumentBackend(...)
+
+# Safe to process frames in parallel
+import concurrent.futures
+
+def process_frame(backend, page_no):
+    page = backend.load_page(page_no)
+    img = page.get_page_image()
+    # Process image
+    page.unload()
+    return result
+
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    futures = [
+        executor.submit(process_frame, backend, i)
+        for i in range(backend.page_count())
+    ]
+    results = [f.result() for f in futures]
+```
+
+**Thread Safety:**
+- Frames extracted eagerly to avoid PIL thread safety issues
+- Each frame is an independent Image object
+- Safe for concurrent page processing
+
+## Performance Considerations
+
+<AccordionGroup>
+  <Accordion title="Resolution vs Speed">
+    Higher resolution improves OCR accuracy but increases processing time:
+    
+    - `images_scale=1.0`: Fast, good for high-quality scans
+    - `images_scale=2.0`: Balanced (recommended)
+    - `images_scale=3.0+`: Slow, for very poor quality scans
+  </Accordion>
+  
+  <Accordion title="Memory Usage">
+    - Multi-page TIFFs load all frames into memory
+    - Large images at high scale factors use significant RAM
+    - Consider processing pages sequentially for memory constraints
+  </Accordion>
+  
+  <Accordion title="OCR Engine Selection">
+    - **EasyOCR**: Best accuracy, slower, GPU-accelerated
+    - **Tesseract**: Fast, good accuracy, CPU-only
+    - **RapidOCR**: Fastest, lower accuracy
+    
+    See [OCR Options](/api/options/ocr-options) comparison.
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Usage
+
+### Batch Image Processing
+
+```python
+import concurrent.futures
+from pathlib import Path
+
+def process_image(image_path):
+    converter = DocumentConverter(
+        format_options={
+            ImageFormatOption: ImageFormatOption(
+                pipeline_options=PdfPipelineOptions(
+                    do_ocr=True,
+                    ocr_options=EasyOcrOptions()
+                )
+            )
+        }
+    )
+    return converter.convert(image_path)
+
+# Process multiple images in parallel
+image_files = list(Path("scans/").glob("*.jpg"))
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    results = list(executor.map(process_image, image_files))
+```
+
+### Extract Specific Regions
+
+```python
+from docling_core.types.doc import BoundingBox, CoordOrigin
+
+backend = ImageDocumentBackend(...)
+page = backend.load_page(0)
+
+# Extract header region
+header_bbox = BoundingBox(
+    l=0, t=0, r=page.get_size().width, b=200,
+    coord_origin=CoordOrigin.TOPLEFT
+)
+header_img = page.get_page_image(cropbox=header_bbox)
+
+page.unload()
+```
+
+### Custom Pipeline
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TableStructureOptions,
+    TableFormerMode
+)
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    do_table_structure=True,
+    images_scale=2.0,
+    
+    # High-accuracy table extraction
+    table_structure_options=TableStructureOptions(
+        mode=TableFormerMode.ACCURATE,
+        do_cell_matching=True
+    ),
+    
+    # GPU-accelerated OCR
+    ocr_options=EasyOcrOptions(
+        use_gpu=True,
+        confidence_threshold=0.6
+    )
+)
+```
+
+## Limitations
+
+<Warning>
+  **Known Limitations:**
+  
+  - **No native text**: Images have no embedded text layer (requires OCR)
+  - **OCR accuracy**: Depends on image quality and OCR engine
+  - **Processing time**: Significantly slower than PDF with embedded text
+  - **Animated GIFs**: Only first frame processed
+  - **Color management**: Images converted to RGB
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Poor OCR results">
+    **Solutions:**
+    1. Increase image scale: `images_scale=2.0` or `3.0`
+    2. Use better OCR engine: Switch to EasyOCR
+    3. Preprocess image: Enhance contrast, remove noise
+    4. Correct language: Set proper OCR language
+    
+    ```python
+    pipeline = PdfPipelineOptions(
+        images_scale=3.0,  # Higher resolution
+        ocr_options=EasyOcrOptions(
+            lang=["en"],
+            use_gpu=True
+        )
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Out of memory">
+    **Solutions:**
+    - Reduce `images_scale`
+    - Process pages sequentially (not parallel)
+    - Reduce batch sizes
+    - Use smaller OCR batch sizes
+  </Accordion>
+  
+  <Accordion title="Slow processing">
+    **Optimizations:**
+    - Enable GPU acceleration for OCR
+    - Reduce `images_scale` if acceptable
+    - Use faster OCR engine (RapidOCR)
+    - Disable unused features (e.g., `do_table_structure=False`)
+  </Accordion>
+  
+  <Accordion title="Multi-page TIFF issues">
+    **Check:**
+    - Verify TIFF is actually multi-frame
+    - Ensure PIL/Pillow can read TIFF format
+    - Try saving individual frames separately
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+1. **Use appropriate resolution**: `images_scale=2.0` for most scans
+2. **Enable OCR**: Always set `do_ocr=True` for images
+3. **Set correct language**: Configure OCR language for best results
+4. **GPU acceleration**: Use GPU for faster OCR if available
+5. **Batch processing**: Process multiple images in parallel
+6. **Memory management**: Monitor memory usage with large images
+
+## See Also
+
+- [Backends Overview](/api/backends/overview) - Backend architecture
+- [PDF Backend](/api/backends/pdf) - PDF processing
+- [OCR Options](/api/options/ocr-options) - OCR configuration
+- [Pipeline Options](/api/options/pipeline-options) - Pipeline settings

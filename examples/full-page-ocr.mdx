@@ -1,0 +1,214 @@
+---
+title: Full-Page OCR
+description: Force full-page OCR on PDFs using different OCR backends
+---
+
+Enable full-page OCR for scanned documents or when layout extraction is unreliable.
+
+## Overview
+
+This example demonstrates:
+- Forcing full-page OCR processing
+- Switching between OCR backends (EasyOCR, Tesseract, macOS OCR, RapidOCR)
+- Enabling table structure extraction with OCR
+- Processing scanned PDFs
+
+## Basic Full-Page OCR
+
+```python full_page_ocr.py
+from pathlib import Path
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TableStructureOptions,
+    TesseractCliOcrOptions,
+)
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+input_doc_path = Path("tests/data/pdf/2206.01062.pdf")
+
+pipeline_options = PdfPipelineOptions()
+pipeline_options.do_ocr = True
+pipeline_options.do_table_structure = True
+pipeline_options.table_structure_options = TableStructureOptions(
+    do_cell_matching=True
+)
+
+# Force full-page OCR with Tesseract CLI
+ocr_options = TesseractCliOcrOptions(force_full_page_ocr=True)
+pipeline_options.ocr_options = ocr_options
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_options=pipeline_options,
+        )
+    }
+)
+
+doc = converter.convert(input_doc_path).document
+print(doc.export_to_markdown())
+```
+
+<Note>
+  `force_full_page_ocr=True` processes each page purely via OCR, which is slower than hybrid detection but more reliable for scanned documents.
+</Note>
+
+## OCR Backend Options
+
+<CodeGroup>
+
+```python EasyOCR
+from docling.datamodel.pipeline_options import EasyOcrOptions
+
+ocr_options = EasyOcrOptions(force_full_page_ocr=True)
+pipeline_options.ocr_options = ocr_options
+```
+
+```python Tesseract (Python)
+from docling.datamodel.pipeline_options import TesseractOcrOptions
+
+ocr_options = TesseractOcrOptions(force_full_page_ocr=True)
+pipeline_options.ocr_options = ocr_options
+```
+
+```python Tesseract CLI
+from docling.datamodel.pipeline_options import TesseractCliOcrOptions
+
+ocr_options = TesseractCliOcrOptions(force_full_page_ocr=True)
+pipeline_options.ocr_options = ocr_options
+```
+
+```python macOS OCR
+from docling.datamodel.pipeline_options import OcrMacOptions
+
+# macOS only
+ocr_options = OcrMacOptions(force_full_page_ocr=True)
+pipeline_options.ocr_options = ocr_options
+```
+
+```python RapidOCR
+from docling.datamodel.pipeline_options import RapidOcrOptions
+
+ocr_options = RapidOcrOptions(force_full_page_ocr=True)
+pipeline_options.ocr_options = ocr_options
+```
+
+</CodeGroup>
+
+## When to Use Full-Page OCR
+
+Use `force_full_page_ocr=True` when:
+
+- Processing scanned PDFs without text layer
+- Layout extraction produces poor results
+- Document contains handwritten content
+- Native PDF text is corrupt or unreliable
+
+<Steps>
+  <Step title="Enable OCR">
+    Set `pipeline_options.do_ocr = True`
+  </Step>
+  
+  <Step title="Choose OCR Backend">
+    Select an OCR option class and set `force_full_page_ocr=True`
+  </Step>
+  
+  <Step title="Configure Table Extraction">
+    Enable table structure recognition for better results
+  </Step>
+  
+  <Step title="Convert Document">
+    Process the PDF with full-page OCR enabled
+  </Step>
+</Steps>
+
+## Complete Example
+
+```python
+from pathlib import Path
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TableStructureOptions,
+    EasyOcrOptions,
+)
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+def convert_with_full_ocr(pdf_path: Path, language: str = "en"):
+    """Convert PDF using full-page OCR.
+    
+    Args:
+        pdf_path: Path to PDF file
+        language: OCR language code (e.g., 'en', 'es', 'de')
+    """
+    pipeline_options = PdfPipelineOptions()
+    pipeline_options.do_ocr = True
+    pipeline_options.do_table_structure = True
+    pipeline_options.table_structure_options = TableStructureOptions(
+        do_cell_matching=True
+    )
+    
+    # Use EasyOCR with full-page mode
+    ocr_options = EasyOcrOptions(
+        force_full_page_ocr=True,
+    )
+    ocr_options.lang = [language]
+    pipeline_options.ocr_options = ocr_options
+    
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(
+                pipeline_options=pipeline_options,
+            )
+        }
+    )
+    
+    result = converter.convert(pdf_path)
+    return result.document
+
+if __name__ == "__main__":
+    pdf_path = Path("scanned_document.pdf")
+    doc = convert_with_full_ocr(pdf_path, language="en")
+    
+    # Export results
+    print(doc.export_to_markdown())
+    
+    # Save to file
+    with open("output.md", "w") as f:
+        f.write(doc.export_to_markdown())
+```
+
+## Performance Considerations
+
+- **Full-page OCR is slower** than hybrid layout+OCR approach
+- **GPU acceleration** helps significantly with EasyOCR
+- **Tesseract CLI** can be faster for CPU-only scenarios
+- **RapidOCR** offers good CPU performance
+- **macOS OCR** uses native APIs on macOS
+
+## Requirements
+
+### EasyOCR
+```bash
+pip install docling easyocr
+```
+
+### Tesseract
+```bash
+pip install docling pytesseract
+# Install Tesseract binary:
+# macOS: brew install tesseract
+# Ubuntu: sudo apt-get install tesseract-ocr
+# Windows: download installer from GitHub
+```
+
+### macOS OCR (macOS only)
+```bash
+pip install docling ocrmac
+```
+
+### RapidOCR
+```bash
+pip install docling rapidocr-onnxruntime
+```

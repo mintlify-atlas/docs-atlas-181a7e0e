@@ -1,0 +1,166 @@
+---
+title: Table Export
+description: Extract tables from documents and export as CSV and HTML
+---
+
+Extract structured table data from PDFs and export to CSV, HTML, or pandas DataFrames.
+
+## Overview
+
+This example demonstrates:
+- Detecting and extracting tables from documents
+- Converting tables to pandas DataFrames
+- Exporting tables as CSV files
+- Exporting tables as HTML
+- Printing tables as Markdown
+
+## Basic Table Extraction
+
+```python export_tables.py
+from pathlib import Path
+import pandas as pd
+from docling.document_converter import DocumentConverter
+
+input_doc_path = Path("tests/data/pdf/2206.01062.pdf")
+output_dir = Path("scratch")
+
+doc_converter = DocumentConverter()
+conv_res = doc_converter.convert(input_doc_path)
+
+output_dir.mkdir(parents=True, exist_ok=True)
+doc_filename = conv_res.input.file.stem
+```
+
+## Export Tables
+
+<Steps>
+  <Step title="Iterate Through Tables">
+    Loop through all detected tables in the document.
+  </Step>
+  
+  <Step title="Convert to DataFrame">
+    Use `table.export_to_dataframe()` to get a pandas DataFrame.
+  </Step>
+  
+  <Step title="Export to Multiple Formats">
+    Save as CSV, HTML, or print as Markdown.
+  </Step>
+</Steps>
+
+```python
+for table_ix, table in enumerate(conv_res.document.tables):
+    # Convert to pandas DataFrame
+    table_df: pd.DataFrame = table.export_to_dataframe(doc=conv_res.document)
+    
+    # Print as Markdown (requires tabulate: pip install tabulate)
+    print(f"## Table {table_ix}")
+    print(table_df.to_markdown())
+    
+    # Save as CSV
+    csv_filename = output_dir / f"{doc_filename}-table-{table_ix + 1}.csv"
+    print(f"Saving CSV table to {csv_filename}")
+    table_df.to_csv(csv_filename)
+    
+    # Save as HTML
+    html_filename = output_dir / f"{doc_filename}-table-{table_ix + 1}.html"
+    print(f"Saving HTML table to {html_filename}")
+    with html_filename.open("w") as fp:
+        fp.write(table.export_to_html(doc=conv_res.document))
+```
+
+## Export Formats
+
+<CodeGroup>
+
+```python CSV Export
+table_df = table.export_to_dataframe(doc=conv_res.document)
+table_df.to_csv("table.csv")
+```
+
+```python HTML Export
+html_content = table.export_to_html(doc=conv_res.document)
+with open("table.html", "w") as fp:
+    fp.write(html_content)
+```
+
+```python Markdown Print
+table_df = table.export_to_dataframe(doc=conv_res.document)
+print(table_df.to_markdown())  # requires: pip install tabulate
+```
+
+```python Direct DataFrame Access
+table_df = table.export_to_dataframe(doc=conv_res.document)
+# Now use pandas functionality
+print(table_df.head())
+print(table_df.describe())
+```
+
+</CodeGroup>
+
+<Note>
+  Printing tables as Markdown using `to_markdown()` requires the `tabulate` package: `pip install tabulate`
+</Note>
+
+## Working with DataFrames
+
+Once you have a DataFrame, you can leverage all pandas functionality:
+
+```python
+table_df = table.export_to_dataframe(doc=conv_res.document)
+
+# Filter rows
+filtered = table_df[table_df['column_name'] > 100]
+
+# Group and aggregate
+grouped = table_df.groupby('category').sum()
+
+# Export to Excel
+table_df.to_excel("table.xlsx", index=False)
+
+# Convert to JSON
+json_str = table_df.to_json(orient='records')
+```
+
+## Complete Example
+
+```python
+from pathlib import Path
+import pandas as pd
+from docling.document_converter import DocumentConverter
+
+input_doc_path = Path("document.pdf")
+output_dir = Path("scratch")
+output_dir.mkdir(parents=True, exist_ok=True)
+
+doc_converter = DocumentConverter()
+conv_res = doc_converter.convert(input_doc_path)
+
+doc_filename = conv_res.input.file.stem
+
+for table_ix, table in enumerate(conv_res.document.tables):
+    # Convert to DataFrame
+    table_df = table.export_to_dataframe(doc=conv_res.document)
+    
+    # Print summary
+    print(f"\n=== Table {table_ix + 1} ===")
+    print(f"Shape: {table_df.shape}")
+    print(f"Columns: {list(table_df.columns)}")
+    
+    # Save as CSV
+    csv_path = output_dir / f"{doc_filename}-table-{table_ix + 1}.csv"
+    table_df.to_csv(csv_path, index=False)
+    print(f"Saved CSV: {csv_path}")
+    
+    # Save as HTML
+    html_path = output_dir / f"{doc_filename}-table-{table_ix + 1}.html"
+    with html_path.open("w") as fp:
+        fp.write(table.export_to_html(doc=conv_res.document))
+    print(f"Saved HTML: {html_path}")
+```
+
+## Requirements
+
+- Python 3.9+
+- `docling` package
+- `pandas` (automatically installed with Docling)
+- `tabulate` (optional, for Markdown printing): `pip install tabulate`

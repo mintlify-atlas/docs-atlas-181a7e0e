@@ -1,0 +1,650 @@
+---
+title: Export Formats
+description: Export DoclingDocument to Markdown, HTML, JSON, DocTags, and other formats with customizable options
+---
+
+## Overview
+
+Once you've converted a document to `DoclingDocument`, Docling offers multiple export formats:
+
+- **Markdown**: Human-readable text with formatting
+- **HTML**: Rich HTML with embedded or linked images
+- **JSON**: Structured data for programmatic access
+- **DocTags**: Structured text format for downstream NLP
+- **Plain Text**: Unformatted text content
+- **YAML**: Human-readable structured data
+
+All exports preserve document structure, metadata, and content from the conversion process.
+
+## Quick Export
+
+Basic export to different formats:
+
+<CodeGroup>
+```python Markdown
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+# Export to Markdown string
+markdown = result.document.export_to_markdown()
+print(markdown)
+
+# Save to file
+result.document.save_as_markdown("output.md")
+```
+
+```python HTML
+# Export to HTML string
+html = result.document.export_to_html()
+
+# Save to file
+result.document.save_as_html("output.html")
+```
+
+```python JSON
+import json
+
+# Export to dict (JSON-serializable)
+data = result.document.export_to_dict()
+json_str = json.dumps(data, indent=2)
+
+# Save to file
+result.document.save_as_json("output.json")
+```
+
+```python Plain Text
+# Export without formatting
+text = result.document.export_to_markdown(strict_text=True)
+
+# Save to file
+result.document.save_as_markdown("output.txt", strict_text=True)
+```
+</CodeGroup>
+
+## Markdown Export
+
+Markdown is the most common export format, ideal for RAG, documentation, and human reading.
+
+### Basic Markdown
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+# Standard Markdown with structure
+markdown = result.document.export_to_markdown()
+print(markdown)
+```
+
+**Example output:**
+```markdown
+# Document Title
+
+## Section 1
+
+This is a paragraph with **bold** and *italic* text.
+
+### Subsection 1.1
+
+- Bullet point 1
+- Bullet point 2
+
+| Header 1 | Header 2 |
+|----------|----------|
+| Cell 1   | Cell 2   |
+```
+
+### Plain Text (No Formatting)
+
+```python
+# Remove all formatting for pure text
+text = result.document.export_to_markdown(strict_text=True)
+print(text)
+```
+
+**Example output:**
+```
+Document Title
+
+Section 1
+
+This is a paragraph with bold and italic text.
+
+Subsection 1.1
+
+Bullet point 1
+Bullet point 2
+
+Header 1 Header 2
+Cell 1 Cell 2
+```
+
+### Image Handling
+
+Control how images are included:
+
+<Tabs>
+  <Tab title="Placeholder (Default)">
+    ```python
+    from docling_core.types.doc import ImageRefMode
+
+    markdown = result.document.export_to_markdown(
+        image_mode=ImageRefMode.PLACEHOLDER
+    )
+    ```
+
+    **Output:**
+    ```markdown
+    ![](picture-1)
+    ```
+
+    Images referenced by ID, actual image data not included.
+  </Tab>
+  
+  <Tab title="Embedded (Base64)">
+    ```python
+    from docling_core.types.doc import ImageRefMode
+
+    markdown = result.document.export_to_markdown(
+        image_mode=ImageRefMode.EMBEDDED
+    )
+    ```
+
+    **Output:**
+    ```markdown
+    ![](data:image/png;base64,iVBORw0KGgoAAAANS...)
+    ```
+
+    Images embedded as base64 data URLs.
+  </Tab>
+  
+  <Tab title="Referenced (File Paths)">
+    ```python
+    from docling_core.types.doc import ImageRefMode
+
+    markdown = result.document.export_to_markdown(
+        image_mode=ImageRefMode.REFERENCED
+    )
+    ```
+
+    **Output:**
+    ```markdown
+    ![](images/picture-1.png)
+    ```
+
+    Images referenced by file path (you must save images separately).
+  </Tab>
+</Tabs>
+
+### Save with Options
+
+```python
+from docling_core.types.doc import ImageRefMode
+
+result.document.save_as_markdown(
+    "output.md",
+    image_mode=ImageRefMode.EMBEDDED,
+    strict_text=False,
+)
+```
+
+## HTML Export
+
+HTML export creates rich, formatted output with embedded or linked images.
+
+### Basic HTML
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+# Export to HTML
+html = result.document.export_to_html()
+print(html)
+```
+
+**Example output:**
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Document Title</title>
+</head>
+<body>
+    <h1>Document Title</h1>
+    <h2>Section 1</h2>
+    <p>This is a paragraph with <strong>bold</strong> and <em>italic</em> text.</p>
+    <table>
+        <tr><th>Header 1</th><th>Header 2</th></tr>
+        <tr><td>Cell 1</td><td>Cell 2</td></tr>
+    </table>
+</body>
+</html>
+```
+
+### HTML with Embedded Images
+
+```python
+from docling_core.types.doc import ImageRefMode
+
+# Embed images as base64 data URLs
+html = result.document.export_to_html(
+    image_mode=ImageRefMode.EMBEDDED
+)
+
+# Save to file
+result.document.save_as_html(
+    "output.html",
+    image_mode=ImageRefMode.EMBEDDED
+)
+```
+
+Images are embedded directly in HTML, creating a standalone file.
+
+### HTML with Page Images
+
+```python
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling_core.types.doc import ImageRefMode
+
+# Generate page images during conversion
+pipeline_options = PdfPipelineOptions(
+    generate_page_images=True,
+    images_scale=2.0,
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+result = converter.convert("document.pdf")
+
+# Export HTML with embedded page images
+result.document.save_as_html(
+    "output.html",
+    image_mode=ImageRefMode.EMBEDDED
+)
+```
+
+## JSON Export
+
+JSON export provides structured, machine-readable document data.
+
+### Basic JSON
+
+```python
+import json
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+# Export to dict
+data = result.document.export_to_dict()
+
+# Pretty-print JSON
+print(json.dumps(data, indent=2))
+
+# Save to file
+with open("output.json", "w") as f:
+    json.dump(data, f, indent=2)
+
+# Or use helper
+result.document.save_as_json("output.json")
+```
+
+### JSON Structure
+
+```json
+{
+  "schema_name": "DoclingDocument",
+  "version": "1.0.0",
+  "name": "document.pdf",
+  "metadata": {
+    "pages": 10,
+    "format": "PDF"
+  },
+  "pages": [
+    {
+      "page_no": 1,
+      "size": {"width": 612.0, "height": 792.0}
+    }
+  ],
+  "furniture": [
+    {
+      "self_ref": "#/texts/0",
+      "type": "subtitle-level-1",
+      "text": "Document Title"
+    }
+  ],
+  "body": [
+    {
+      "self_ref": "#/texts/1",
+      "type": "paragraph",
+      "text": "This is a paragraph."
+    }
+  ]
+}
+```
+
+### JSON with Images
+
+```python
+from docling_core.types.doc import ImageRefMode
+
+# Embed images as base64 in JSON
+data = result.document.export_to_dict(
+    image_mode=ImageRefMode.EMBEDDED
+)
+
+# Or use placeholders
+data = result.document.export_to_dict(
+    image_mode=ImageRefMode.PLACEHOLDER
+)
+
+result.document.save_as_json(
+    "output.json",
+    image_mode=ImageRefMode.EMBEDDED
+)
+```
+
+## DocTags Export
+
+DocTags is a structured text format designed for NLP pipelines:
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+# Export to DocTags
+doctags = result.document.export_to_doctags()
+print(doctags)
+
+# Save to file
+result.document.save_as_doctags("output.doctags.txt")
+```
+
+**Example output:**
+```
+<title>Document Title</title>
+<section-header>Section 1</section-header>
+<paragraph>This is a paragraph with bold and italic text.</paragraph>
+<subsection-header>Subsection 1.1</subsection-header>
+<list-item>Bullet point 1</list-item>
+<list-item>Bullet point 2</list-item>
+<table>
+  <row>
+    <cell>Header 1</cell>
+    <cell>Header 2</cell>
+  </row>
+  <row>
+    <cell>Cell 1</cell>
+    <cell>Cell 2</cell>
+  </row>
+</table>
+```
+
+<Note>
+DocTags format is ideal for:
+- Named entity recognition (NER)
+- Document classification
+- Information extraction
+- Custom NLP pipelines
+</Note>
+
+## YAML Export
+
+Human-readable structured data format:
+
+```python
+import yaml
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+# Export to dict, then to YAML
+data = result.document.export_to_dict()
+yaml_str = yaml.safe_dump(data, default_flow_style=False)
+
+print(yaml_str)
+
+# Save to file
+with open("output.yaml", "w") as f:
+    yaml.safe_dump(data, f, default_flow_style=False)
+```
+
+**Example output:**
+```yaml
+schema_name: DoclingDocument
+version: 1.0.0
+name: document.pdf
+metadata:
+  pages: 10
+  format: PDF
+pages:
+  - page_no: 1
+    size:
+      width: 612.0
+      height: 792.0
+body:
+  - self_ref: '#/texts/1'
+    type: paragraph
+    text: This is a paragraph.
+```
+
+## Batch Export
+
+Export multiple documents to various formats:
+
+```python
+import json
+from pathlib import Path
+from docling_core.types.doc import ImageRefMode
+from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import ConversionStatus
+
+input_files = list(Path("documents/").glob("*.pdf"))
+output_dir = Path("output/")
+output_dir.mkdir(parents=True, exist_ok=True)
+
+converter = DocumentConverter()
+
+for result in converter.convert_all(input_files, raises_on_error=False):
+    if result.status == ConversionStatus.SUCCESS:
+        doc_filename = result.input.file.stem
+        
+        # Export to multiple formats
+        result.document.save_as_markdown(
+            output_dir / f"{doc_filename}.md",
+            image_mode=ImageRefMode.PLACEHOLDER,
+        )
+        result.document.save_as_html(
+            output_dir / f"{doc_filename}.html",
+            image_mode=ImageRefMode.EMBEDDED,
+        )
+        result.document.save_as_json(
+            output_dir / f"{doc_filename}.json",
+            image_mode=ImageRefMode.PLACEHOLDER,
+        )
+        result.document.save_as_doctags(
+            output_dir / f"{doc_filename}.doctags.txt"
+        )
+        
+        print(f"Exported: {doc_filename}")
+```
+
+## Multimodal Export (Parquet)
+
+Export page images, text, and metadata to Parquet for machine learning:
+
+```python
+import pandas as pd
+from pathlib import Path
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.utils.export import generate_multimodal_pages
+
+# Generate page images during conversion
+pipeline_options = PdfPipelineOptions(
+    generate_page_images=True,
+    images_scale=2.0,
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+result = converter.convert("document.pdf")
+
+rows = []
+for (
+    content_text,
+    content_md,
+    content_dt,
+    page_cells,
+    page_segments,
+    page,
+) in generate_multimodal_pages(result):
+    rows.append(
+        {
+            "document": result.input.file.name,
+            "page_num": page.page_no,
+            "image": {
+                "width": page.image.width,
+                "height": page.image.height,
+                "bytes": page.image.tobytes(),
+            },
+            "text": content_text,
+            "markdown": content_md,
+            "doctags": content_dt,
+            "cells": page_cells,
+            "segments": page_segments,
+        }
+    )
+
+# Export to Parquet
+df = pd.json_normalize(rows)
+df.to_parquet("output.parquet")
+
+print(f"Exported {len(rows)} pages to output.parquet")
+```
+
+<Note>
+Parquet export is useful for:
+- Training multimodal ML models
+- Building document datasets
+- Efficient storage of page images + text
+- Integration with data science workflows
+</Note>
+
+## Custom Export Pipeline
+
+Access document structure programmatically:
+
+```python
+from docling.document_converter import DocumentConverter
+from docling_core.types.doc import (
+    TextItem,
+    TableItem,
+    PictureItem,
+    SectionHeaderItem,
+)
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+doc = result.document
+
+# Iterate through all items
+for item, level in doc.iterate_items():
+    if isinstance(item, SectionHeaderItem):
+        print(f"Header (level {level}): {item.text}")
+    elif isinstance(item, TextItem):
+        print(f"Text: {item.text[:50]}...")
+    elif isinstance(item, TableItem):
+        print(f"Table: {item.num_rows} rows, {item.num_cols} cols")
+        # Export table to CSV, pandas, etc.
+        df = item.export_to_dataframe()
+        df.to_csv(f"table_{item.self_ref}.csv")
+    elif isinstance(item, PictureItem):
+        print(f"Picture: {item.self_ref}")
+        if item.image:
+            item.image.save(f"picture_{item.self_ref}.png")
+```
+
+## Export Comparison
+
+| Format | Use Case | Images | Structure | Size |
+|--------|----------|--------|-----------|------|
+| **Markdown** | RAG, documentation, human reading | Embedded/Linked | Basic | Small |
+| **HTML** | Web display, rich previews | Embedded/Linked | Rich | Medium |
+| **JSON** | API integration, programmatic access | Embedded/Linked | Full | Medium |
+| **DocTags** | NLP pipelines, text analysis | No | Semantic | Small |
+| **Plain Text** | Search indexing, simple RAG | No | None | Smallest |
+| **YAML** | Configuration, human editing | Embedded/Linked | Full | Medium |
+| **Parquet** | ML datasets, analytics | Raw bytes | Full + metadata | Large |
+
+## Best Practices
+
+<Steps>
+
+<Step title="Choose the right format for your use case">
+- **RAG/Search**: Markdown or Plain Text
+- **Web display**: HTML with embedded images
+- **API integration**: JSON
+- **NLP pipelines**: DocTags
+- **ML training**: Parquet
+</Step>
+
+<Step title="Consider image handling">
+- **Standalone files**: Use `ImageRefMode.EMBEDDED`
+- **Separate image files**: Use `ImageRefMode.REFERENCED` and save images separately
+- **Text-only**: Use `ImageRefMode.PLACEHOLDER` or `strict_text=True`
+</Step>
+
+<Step title="Optimize for file size">
+- Use `strict_text=True` for smallest Markdown
+- Use `ImageRefMode.PLACEHOLDER` to exclude image data
+- Use JSON over YAML for large datasets (more compact)
+</Step>
+
+<Step title="Preserve structure">
+- Use JSON or YAML for full document structure
+- Use DocTags for semantic structure only
+- Use Markdown for human-readable structure
+</Step>
+
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Basic Conversion" icon="file-arrow-down" href="/guides/basic-conversion">
+    Learn the fundamentals of document conversion
+  </Card>
+  <Card title="Batch Processing" icon="layer-group" href="/guides/batch-processing">
+    Export large document collections efficiently
+  </Card>
+  <Card title="LangChain Integration" icon="link" href="/integrations/langchain">
+    Use exports in RAG pipelines with LangChain
+  </Card>
+  <Card title="LlamaIndex Integration" icon="link" href="/integrations/llamaindex">
+    Build search indexes with LlamaIndex
+  </Card>
+</CardGroup>

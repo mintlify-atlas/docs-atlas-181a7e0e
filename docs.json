@@ -1,122 +1,175 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Docling",
+  "theme": "palm",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#0094ff",
+    "light": "#6ec1ff",
+    "dark": "#003778"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/docling-project/docling"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/docling-project/docling",
+      "discord": "https://docling.ai/discord",
+      "linkedin": "https://linkedin.com/company/docling/"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "installation",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/architecture",
+              "concepts/docling-document",
+              "concepts/pipelines",
+              "concepts/backends",
+              "concepts/serialization",
+              "concepts/chunking"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Usage Guides",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "guides/basic-conversion",
+              "guides/advanced-options",
+              "guides/batch-processing",
+              "guides/pdf-processing",
+              "guides/ocr-configuration",
+              "guides/vlm-models",
+              "guides/audio-video",
+              "guides/export-formats"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Advanced Features",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "advanced/information-extraction",
+              "advanced/enrichments",
+              "advanced/plugins",
+              "advanced/confidence-scores",
+              "advanced/gpu-acceleration",
+              "advanced/model-catalog"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/overview",
+              "integrations/langchain",
+              "integrations/llamaindex",
+              "integrations/haystack",
+              "integrations/crewai",
+              "integrations/mcp-server",
+              "integrations/more"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Core API",
             "pages": [
-              "api-reference/introduction"
+              "api/document-converter",
+              "api/conversion-result",
+              "api/docling-document"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Pipelines",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/pipelines/standard-pdf",
+              "api/pipelines/simple",
+              "api/pipelines/vlm",
+              "api/pipelines/asr"
+            ]
+          },
+          {
+            "group": "Options & Configuration",
+            "pages": [
+              "api/options/pipeline-options",
+              "api/options/pdf-backend-options",
+              "api/options/ocr-options",
+              "api/options/table-structure-options",
+              "api/options/accelerator-options"
+            ]
+          },
+          {
+            "group": "Backends",
+            "pages": [
+              "api/backends/overview",
+              "api/backends/pdf",
+              "api/backends/docx",
+              "api/backends/pptx",
+              "api/backends/xlsx",
+              "api/backends/html",
+              "api/backends/image",
+              "api/backends/audio"
+            ]
+          },
+          {
+            "group": "CLI",
+            "pages": [
+              "api/cli/commands",
+              "api/cli/options"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Examples",
+        "groups": [
+          {
+            "group": "Conversion",
+            "pages": [
+              "examples/simple-conversion",
+              "examples/custom-conversion",
+              "examples/batch-conversion",
+              "examples/multi-format",
+              "examples/figure-export",
+              "examples/table-export"
+            ]
+          },
+          {
+            "group": "Advanced Processing",
+            "pages": [
+              "examples/vlm-pipeline",
+              "examples/asr-pipeline",
+              "examples/full-page-ocr",
+              "examples/pii-detection",
+              "examples/translation"
+            ]
+          },
+          {
+            "group": "RAG & AI Workflows",
+            "pages": [
+              "examples/rag-langchain",
+              "examples/rag-llamaindex",
+              "examples/rag-haystack",
+              "examples/information-extraction",
+              "examples/chunking-serialization"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

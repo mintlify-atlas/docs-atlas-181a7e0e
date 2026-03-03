@@ -1,80 +1,353 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Convert your first document with Docling in minutes
 ---
 
-## Get started in three steps
+This guide walks you through your first document conversion using Docling. You'll learn how to convert a PDF to Markdown with just a few lines of Python code.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, ensure you have:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+- Python 3.10 or higher installed
+- Docling installed (see [Installation](/installation))
+
+```bash
+pip install docling
+```
+
+## Your first conversion
+
+Let's start with the simplest possible example - converting a document and exporting it to Markdown.
+
+<Steps>
+  <Step title="Create a Python script">
+    Create a new file called `convert_document.py`:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```python
+    from docling.document_converter import DocumentConverter
+
+    # Specify your document source (URL or local path)
+    source = "https://arxiv.org/pdf/2408.09869"
+
+    # Create a converter and process the document
+    converter = DocumentConverter()
+    result = converter.convert(source)
+
+    # Export to Markdown and print
+    print(result.document.export_to_markdown())
+    ```
+  </Step>
+  
+  <Step title="Run the script">
+    Execute your script:
+    ```bash
+    python convert_document.py
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+    You should see the document content in Markdown format printed to your console.
+  </Step>
+  
+  <Step title="Understand the output">
+    The `result` object contains:
+    - `result.document` - The structured DoclingDocument with all content and metadata
+    - `result.status` - Conversion status (SUCCESS, PARTIAL_SUCCESS, or FAILURE)
+    - `result.input` - Information about the source document
+  </Step>
+</Steps>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+**Supported sources:** You can use URLs, local file paths, or file-like objects as input. Docling auto-detects the format.
 </Note>
+
+## Converting local files
+
+To convert a local file instead of a URL:
+
+```python
+from pathlib import Path
+from docling.document_converter import DocumentConverter
+
+# Use a local file path
+source = Path("/path/to/your/document.pdf")
+
+converter = DocumentConverter()
+result = converter.convert(source)
+
+print(result.document.export_to_markdown())
+```
+
+## Export formats
+
+Docling supports multiple export formats. Here's how to use them:
+
+<CodeGroup>
+```python Markdown
+# Export to Markdown
+markdown_content = result.document.export_to_markdown()
+print(markdown_content)
+
+# Save to file
+result.document.save_as_markdown("output.md")
+```
+
+```python HTML
+# Export to HTML with embedded images
+html_content = result.document.export_to_html()
+print(html_content)
+
+# Save to file
+from docling_core.types.doc import ImageRefMode
+result.document.save_as_html(
+    "output.html",
+    image_mode=ImageRefMode.EMBEDDED
+)
+```
+
+```python JSON
+# Export to JSON (lossless format preserving all metadata)
+json_dict = result.document.export_to_dict()
+
+# Save to file
+result.document.save_as_json("output.json")
+```
+
+```python Plain Text
+# Export as plain text (no formatting)
+text_content = result.document.export_to_markdown(strict_text=True)
+print(text_content)
+
+# Save to file
+result.document.save_as_markdown("output.txt", strict_text=True)
+```
+
+```python DocTags
+# Export to DocTags format (semantic document tokens)
+doctags_content = result.document.export_to_doctags()
+print(doctags_content)
+
+# Save to file
+result.document.save_as_doctags("output.doctags.txt")
+```
+</CodeGroup>
+
+## Working with document content
+
+The `DoclingDocument` provides structured access to all document elements:
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+doc = result.document
+
+# Access document metadata
+print(f"Document name: {doc.name}")
+print(f"Number of pages: {len(doc.pages)}")
+
+# Iterate through document elements
+for element, level in doc.iterate_items():
+    print(f"{'  ' * level}{element.label}: {element.text[:50]}...")
+
+# Access specific element types
+print(f"\nFound {len(doc.tables)} tables")
+for i, table in enumerate(doc.tables):
+    print(f"Table {i + 1}:")
+    # Export table to pandas DataFrame
+    df = table.export_to_dataframe(doc)
+    print(df.head())
+
+print(f"\nFound {len(doc.pictures)} figures/images")
+for i, picture in enumerate(doc.pictures):
+    print(f"Figure {i + 1}: {picture.caption or 'No caption'}")
+```
+
+## Batch processing
+
+Convert multiple documents efficiently:
+
+```python
+from pathlib import Path
+from docling.document_converter import DocumentConverter
+
+# List of documents to convert
+documents = [
+    "document1.pdf",
+    "document2.docx",
+    "https://example.com/document3.pdf"
+]
+
+converter = DocumentConverter()
+
+# Convert all documents
+for conv_result in converter.convert_all(documents):
+    doc_filename = conv_result.input.file.stem
+    
+    if conv_result.status == "success":
+        # Save successful conversions
+        output_path = Path(f"output/{doc_filename}.md")
+        output_path.parent.mkdir(exist_ok=True)
+        conv_result.document.save_as_markdown(output_path)
+        print(f"✓ Converted {doc_filename}")
+    else:
+        print(f"✗ Failed to convert {doc_filename}")
+```
+
+## Using the CLI
+
+Docling includes a command-line interface for quick conversions without writing code:
+
+<Tabs>
+  <Tab title="Basic usage">
+    Convert a document and print Markdown output:
+    ```bash
+    docling https://arxiv.org/pdf/2408.09869
+    ```
+  </Tab>
+  
+  <Tab title="Save to file">
+    Save output to a specific file:
+    ```bash
+    docling document.pdf --output output.md
+    ```
+  </Tab>
+  
+  <Tab title="Batch conversion">
+    Convert multiple documents:
+    ```bash
+    docling file1.pdf file2.docx file3.html --output-dir ./converted
+    ```
+  </Tab>
+  
+  <Tab title="Using VLM">
+    Use Visual Language Models for enhanced understanding:
+    ```bash
+    docling --pipeline vlm --vlm-model granite_docling document.pdf
+    ```
+    <Note>
+    VLM pipeline provides enhanced understanding but requires the `vlm` extra: `pip install docling[vlm]`
+    </Note>
+  </Tab>
+</Tabs>
+
+For more CLI options, see the [CLI reference](/api/cli/commands).
+
+## What's next?
+
+Now that you've completed your first conversion, explore these topics:
+
+<CardGroup cols={2}>
+  <Card title="Basic conversion guide" icon="file-lines" href="/guides/basic-conversion">
+    Learn about format support, input types, and conversion options
+  </Card>
+  
+  <Card title="Advanced options" icon="sliders" href="/guides/advanced-options">
+    Configure pipelines, OCR engines, and processing settings
+  </Card>
+  
+  <Card title="Export formats" icon="file-export" href="/guides/export-formats">
+    Deep dive into all export formats and customization options
+  </Card>
+  
+  <Card title="DoclingDocument" icon="file-code" href="/concepts/docling-document">
+    Understand the unified document representation
+  </Card>
+  
+  <Card title="Batch processing" icon="layer-group" href="/guides/batch-processing">
+    Process multiple documents efficiently at scale
+  </Card>
+  
+  <Card title="PDF processing" icon="file-pdf" href="/guides/pdf-processing">
+    Advanced PDF features: layout, tables, formulas, and more
+  </Card>
+  
+  <Card title="OCR configuration" icon="text" href="/guides/ocr-configuration">
+    Configure OCR engines for scanned documents and images
+  </Card>
+  
+  <Card title="RAG integration" icon="database" href="/examples/rag-langchain">
+    Build RAG applications with LangChain and LlamaIndex
+  </Card>
+</CardGroup>
+
+## Common patterns
+
+### Error handling
+
+```python
+from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import ConversionStatus
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+if result.status == ConversionStatus.SUCCESS:
+    print("Conversion successful!")
+    markdown = result.document.export_to_markdown()
+elif result.status == ConversionStatus.PARTIAL_SUCCESS:
+    print("Partial success with errors:")
+    for error in result.errors:
+        print(f"  - {error.error_message}")
+    # Still can use the document
+    markdown = result.document.export_to_markdown()
+else:
+    print("Conversion failed")
+    for error in result.errors:
+        print(f"  - {error.error_message}")
+```
+
+### Custom output directory
+
+```python
+from pathlib import Path
+from docling.document_converter import DocumentConverter
+
+output_dir = Path("converted_docs")
+output_dir.mkdir(exist_ok=True)
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+# Save in multiple formats
+base_name = result.input.file.stem
+result.document.save_as_markdown(output_dir / f"{base_name}.md")
+result.document.save_as_json(output_dir / f"{base_name}.json")
+result.document.save_as_html(output_dir / f"{base_name}.html")
+```
+
+### Extract specific content
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+doc = result.document
+
+# Extract all tables as CSV files
+for i, table in enumerate(doc.tables):
+    df = table.export_to_dataframe(doc)
+    df.to_csv(f"table_{i + 1}.csv", index=False)
+
+# Extract all images
+for i, picture in enumerate(doc.pictures):
+    if picture.image:
+        # Access the image data
+        image_data = picture.image.pil_image
+        image_data.save(f"figure_{i + 1}.png")
+
+# Get just the text content
+text_only = doc.export_to_markdown(strict_text=True)
+with open("content.txt", "w") as f:
+    f.write(text_only)
+```
+
+## Get help
+
+If you run into issues:
+
+- Check the [troubleshooting section](/installation#troubleshooting) in the installation guide
+- Browse [examples](/examples/simple-conversion) for more code samples
+- Ask questions on [Discord](https://docling.ai/discord)
+- Report bugs on [GitHub](https://github.com/docling-project/docling/issues)

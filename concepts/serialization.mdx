@@ -1,0 +1,489 @@
+---
+title: Serialization
+description: Serializing DoclingDocument to various output formats
+---
+
+## Introduction
+
+A *document serializer* (also called simply *serializer*) is a Docling abstraction that takes a `DoclingDocument` and produces a textual representation in a specific format.
+
+Besides document-level serialization, Docling defines serializers for specific document components:
+
+- **Document serializer**: Complete document output
+- **Text serializer**: Text item formatting
+- **Table serializer**: Table formatting (Markdown, HTML, etc.)
+- **Picture serializer**: Image representation
+- **List serializer**: List formatting
+- **Inline serializer**: Inline elements (bold, italic, links)
+
+## Serializer Architecture
+
+### Base Classes
+
+Docling defines a hierarchy of serializer base classes:
+
+- `BaseDocSerializer`: Document-level serialization
+- `BaseTextSerializer`: Text item serialization
+- `BaseTableSerializer`: Table serialization
+- `BasePictureSerializer`: Picture serialization
+- `BaseListSerializer`: List serialization
+- `BaseInlineSerializer`: Inline element serialization
+
+**Source**: [docling-core serializer base classes](https://github.com/docling-project/docling-core/blob/main/docling_core/transforms/serializer/base.py)
+
+### Key Method
+
+The primary method for all document serializers:
+
+```python
+class BaseDocSerializer(ABC):
+    @abstractmethod
+    def serialize(self, **kwargs) -> tuple[str, dict]:
+        """Serialize the document.
+        
+        Returns:
+            tuple: (serialized_text, metadata)
+                - serialized_text: The formatted output
+                - metadata: Information about which components were serialized
+        """
+        pass
+```
+
+### Serializer Provider
+
+A `BaseSerializerProvider` abstracts the serialization strategy from the document instance, allowing flexible serializer selection:
+
+```python
+class BaseSerializerProvider:
+    def get_serializer(self, format: str) -> BaseDocSerializer:
+        """Get appropriate serializer for the requested format."""
+        pass
+```
+
+## Built-in Serializers
+
+Docling provides predefined serializers for common formats:
+
+### Markdown Serializer
+
+**Class**: `MarkdownDocSerializer`
+
+**Features**:
+- Converts document structure to Markdown syntax
+- Preserves headings, lists, tables, and links
+- Handles images as references or inline data
+- Supports custom formatting options
+
+**Usage via export method**:
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+# Shorthand using export method
+markdown = result.document.export_to_markdown()
+print(markdown)
+```
+
+**Direct usage**:
+```python
+from docling_core.transforms.serializer.markdown import MarkdownDocSerializer
+
+serializer = MarkdownDocSerializer(doc=result.document)
+markdown_text, metadata = serializer.serialize()
+
+print(f"Serialized {len(metadata['elements'])} elements")
+print(markdown_text)
+```
+
+**Output example**:
+```markdown
+# Document Title
+
+## Section 1
+
+This is a paragraph with **bold** and *italic* text.
+
+- List item 1
+- List item 2
+
+| Column A | Column B |
+|----------|----------|
+| Cell 1   | Cell 2   |
+```
+
+### HTML Serializer
+
+**Class**: `HTMLDocSerializer`
+
+**Features**:
+- Semantic HTML5 output
+- Preserves document structure with appropriate tags
+- CSS-friendly class names
+- Table structure preserved
+
+**Usage via export method**:
+```python
+html = result.document.export_to_html()
+print(html)
+```
+
+**Direct usage**:
+```python
+from docling_core.transforms.serializer.html import HTMLDocSerializer
+
+serializer = HTMLDocSerializer(doc=result.document)
+html_text, metadata = serializer.serialize()
+```
+
+**Output example**:
+```html
+<article>
+  <h1>Document Title</h1>
+  <section>
+    <h2>Section 1</h2>
+    <p>This is a paragraph with <strong>bold</strong> and <em>italic</em> text.</p>
+    <ul>
+      <li>List item 1</li>
+      <li>List item 2</li>
+    </ul>
+    <table>
+      <tr><th>Column A</th><th>Column B</th></tr>
+      <tr><td>Cell 1</td><td>Cell 2</td></tr>
+    </table>
+  </section>
+</article>
+```
+
+### DocTags Serializer
+
+**Class**: `DocTagsDocSerializer`
+
+**Features**:
+- Structured format with bounding box information
+- Used for training vision-language models
+- Preserves spatial layout information
+
+**Usage**:
+```python
+doctags = result.document.export_to_doctags()
+```
+
+**Output example**:
+```xml
+<title bbox="[50, 100, 300, 150]">Document Title</title>
+<paragraph bbox="[50, 200, 400, 250]">This is content.</paragraph>
+```
+
+## DoclingDocument Export Methods
+
+The `DoclingDocument` class provides convenient export shortcuts:
+
+### export_to_markdown()
+
+```python
+markdown: str = doc.export_to_markdown(
+    image_placeholder: str = "<image>",  # Placeholder for images
+    # Additional options...
+)
+```
+
+### export_to_html()
+
+```python
+html: str = doc.export_to_html(
+    # HTML-specific options...
+)
+```
+
+### export_to_dict()
+
+```python
+data: dict = doc.export_to_dict()
+# Returns a dictionary representation of the document structure
+```
+
+### export_to_doctags()
+
+```python
+doctags: str = doc.export_to_doctags()
+```
+
+### export_to_json()
+
+```python
+import json
+
+json_str = json.dumps(doc.export_to_dict(), indent=2)
+# Serialize to JSON format
+```
+
+<Info>
+These export methods are convenience wrappers that internally instantiate and use the corresponding serializers. For advanced use cases requiring custom configuration, use serializers directly.
+</Info>
+
+## Custom Serializers
+
+You can create custom serializers for specialized output formats:
+
+### Document Serializer Example
+
+```python
+from docling_core.transforms.serializer.base import BaseDocSerializer
+from docling_core.types.doc import DoclingDocument, TextItem, TableItem
+
+class CustomDocSerializer(BaseDocSerializer):
+    def __init__(self, doc: DoclingDocument):
+        self.doc = doc
+    
+    def serialize(self, **kwargs) -> tuple[str, dict]:
+        output = []
+        metadata = {"elements": []}
+        
+        for item, level in self.doc.iterate_items():
+            if isinstance(item, TextItem):
+                # Custom text formatting
+                indent = "  " * level
+                output.append(f"{indent}{item.text}")
+                metadata["elements"].append(item.label)
+            
+            elif isinstance(item, TableItem):
+                # Custom table formatting
+                output.append("[TABLE]")
+                metadata["elements"].append("table")
+        
+        return "\n".join(output), metadata
+
+# Usage
+serializer = CustomDocSerializer(doc=result.document)
+custom_output, meta = serializer.serialize()
+print(custom_output)
+```
+
+### Component Serializer Example
+
+```python
+from docling_core.transforms.serializer.base import BaseTableSerializer
+from docling_core.types.doc import TableItem
+
+class CSVTableSerializer(BaseTableSerializer):
+    def serialize_table(self, table: TableItem, **kwargs) -> str:
+        rows = []
+        for row in table.data.grid:
+            cells = [cell.text for cell in row]
+            rows.append(",".join(cells))
+        return "\n".join(rows)
+
+# Usage with custom document serializer
+class CSVDocSerializer(BaseDocSerializer):
+    def __init__(self, doc: DoclingDocument):
+        self.doc = doc
+        self.table_serializer = CSVTableSerializer()
+    
+    def serialize(self, **kwargs) -> tuple[str, dict]:
+        output = []
+        for table in self.doc.tables:
+            output.append(self.table_serializer.serialize_table(table))
+            output.append("")  # Blank line between tables
+        
+        return "\n".join(output), {"table_count": len(self.doc.tables)}
+```
+
+## Serialization with Options
+
+Many serializers accept configuration options:
+
+```python
+from docling_core.transforms.serializer.markdown import MarkdownDocSerializer
+
+serializer = MarkdownDocSerializer(
+    doc=result.document,
+    # Options (if supported)
+)
+
+markdown, metadata = serializer.serialize(
+    image_mode="placeholder",  # How to handle images
+    max_depth=5,                # Maximum heading depth
+    # Additional parameters
+)
+```
+
+## Metadata from Serialization
+
+Serializers return metadata about the serialization process:
+
+```python
+markdown, metadata = serializer.serialize()
+
+print(f"Elements serialized: {metadata.get('elements', [])}")
+print(f"Tables included: {metadata.get('table_count', 0)}")
+print(f"Images included: {metadata.get('image_count', 0)}")
+```
+
+This metadata is useful for:
+- Tracking which document components were included
+- Debugging serialization issues
+- Generating statistics about the output
+
+## Integration with Export Workflows
+
+### Save to File
+
+```python
+from pathlib import Path
+
+converter = DocumentConverter()
+result = converter.convert("input.pdf")
+
+# Export to Markdown file
+markdown = result.document.export_to_markdown()
+Path("output.md").write_text(markdown, encoding="utf-8")
+
+# Export to HTML file
+html = result.document.export_to_html()
+Path("output.html").write_text(html, encoding="utf-8")
+
+# Export to JSON file
+import json
+json_data = result.document.export_to_dict()
+Path("output.json").write_text(json.dumps(json_data, indent=2), encoding="utf-8")
+```
+
+### Batch Export
+
+```python
+converter = DocumentConverter()
+
+for input_file in input_files:
+    result = converter.convert(input_file)
+    
+    # Export to multiple formats
+    output_base = Path(input_file).stem
+    
+    Path(f"{output_base}.md").write_text(
+        result.document.export_to_markdown(), encoding="utf-8"
+    )
+    
+    Path(f"{output_base}.html").write_text(
+        result.document.export_to_html(), encoding="utf-8"
+    )
+```
+
+## Advanced Serialization Techniques
+
+### Conditional Element Inclusion
+
+```python
+class SelectiveMarkdownSerializer(BaseDocSerializer):
+    def __init__(self, doc: DoclingDocument, include_tables: bool = True):
+        self.doc = doc
+        self.include_tables = include_tables
+    
+    def serialize(self, **kwargs) -> tuple[str, dict]:
+        output = []
+        
+        for item, level in self.doc.iterate_items():
+            if isinstance(item, TextItem):
+                output.append(item.text)
+            elif isinstance(item, TableItem) and self.include_tables:
+                # Include table
+                output.append(self._format_table(item))
+        
+        return "\n\n".join(output), {}
+```
+
+### Hierarchical Formatting
+
+```python
+class IndentedSerializer(BaseDocSerializer):
+    def serialize(self, **kwargs) -> tuple[str, dict]:
+        output = []
+        
+        for item, level in self.doc.iterate_items():
+            if isinstance(item, TextItem):
+                indent = "  " * level
+                prefix = "#" * (level + 1) if item.label.is_heading() else "-"
+                output.append(f"{indent}{prefix} {item.text}")
+        
+        return "\n".join(output), {}
+```
+
+## Performance Considerations
+
+### Large Documents
+
+For very large documents, consider streaming output:
+
+```python
+class StreamingSerializer(BaseDocSerializer):
+    def serialize_to_file(self, output_path: Path, **kwargs):
+        with output_path.open("w", encoding="utf-8") as f:
+            for item, level in self.doc.iterate_items():
+                # Write incrementally instead of building full string
+                f.write(self._format_item(item, level))
+                f.write("\n")
+```
+
+### Caching Serialized Output
+
+```python
+from functools import lru_cache
+
+class CachedSerializer(BaseDocSerializer):
+    @lru_cache(maxsize=1)
+    def serialize(self, **kwargs) -> tuple[str, dict]:
+        # Expensive serialization cached
+        return self._do_serialize(**kwargs)
+```
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Document preview generation">
+    Use Markdown or HTML serializers to generate previews for document management systems.
+  </Accordion>
+  
+  <Accordion title="Search indexing">
+    Export to plain text for indexing in search engines while preserving document metadata.
+  </Accordion>
+  
+  <Accordion title="LLM/RAG input">
+    Serialize to Markdown for feeding into language models, optionally using chunking first.
+  </Accordion>
+  
+  <Accordion title="Web publishing">
+    Export to HTML for direct publishing to web platforms or CMSs.
+  </Accordion>
+  
+  <Accordion title="Format migration">
+    Convert between document formats by combining Docling conversion with serialization.
+  </Accordion>
+</AccordionGroup>
+
+## Examples
+
+For detailed examples of serialization in action, see:
+
+- [Serialization examples](../examples/serialization.ipynb)
+- [Advanced chunking & serialization](../examples/advanced_chunking_and_serialization.ipynb)
+
+## Related Topics
+
+<CardGroup cols={2}>
+  <Card title="DoclingDocument" icon="file-code" href="/concepts/docling-document">
+    Learn about the document representation being serialized
+  </Card>
+  
+  <Card title="Chunking" icon="scissors" href="/concepts/chunking">
+    Chunk documents before or after serialization
+  </Card>
+  
+  <Card title="docling-core Serializers" icon="github" href="https://github.com/docling-project/docling-core/blob/main/docling_core/transforms/serializer/base.py">
+    Explore serializer base class definitions
+  </Card>
+  
+  <Card title="Examples" icon="code" href="/examples/chunking-serialization">
+    See serialization in practical examples
+  </Card>
+</CardGroup>

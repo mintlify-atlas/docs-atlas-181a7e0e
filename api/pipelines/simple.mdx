@@ -1,0 +1,166 @@
+---
+title: SimplePipeline
+description: Straightforward pipeline for formats that produce direct DoclingDocument output
+---
+
+## Overview
+
+`SimplePipeline` is used for document formats and backends that can produce `DoclingDocument` output directly without page-level processing. This pipeline is suitable for declarative backends that don't require complex multi-stage conversion.
+
+## Class Signature
+
+```python
+class SimplePipeline(ConvertPipeline):
+    def __init__(self, pipeline_options: ConvertPipelineOptions)
+```
+
+### Parameters
+
+<ParamField path="pipeline_options" type="ConvertPipelineOptions" required>
+  Configuration options for the simple pipeline
+  
+  <Expandable title="properties">
+    <ParamField path="do_picture_classification" type="bool" default="false">
+      Enable picture classification
+    </ParamField>
+    
+    <ParamField path="do_picture_description" type="bool" default="false">
+      Enable picture description generation
+    </ParamField>
+    
+    <ParamField path="do_chart_extraction" type="bool" default="false">
+      Enable chart data extraction
+    </ParamField>
+    
+    <ParamField path="artifacts_path" type="str | None">
+      Path to directory containing model artifacts
+    </ParamField>
+    
+    <ParamField path="accelerator_options" type="AcceleratorOptions">
+      Hardware acceleration configuration
+    </ParamField>
+    
+    <ParamField path="enable_remote_services" type="bool" default="false">
+      Enable remote model services
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Methods
+
+### execute
+
+Executes the pipeline on an input document.
+
+```python
+def execute(
+    self,
+    in_doc: InputDocument,
+    raises_on_error: bool
+) -> ConversionResult
+```
+
+<ParamField path="in_doc" type="InputDocument" required>
+  Input document to process
+</ParamField>
+
+<ParamField path="raises_on_error" type="bool" required>
+  If True, raises exceptions on errors; otherwise captures them in ConversionResult
+</ParamField>
+
+<ResponseField name="return" type="ConversionResult">
+  Conversion result containing the processed document and status
+</ResponseField>
+
+### get_default_options
+
+Returns default pipeline options.
+
+```python
+@classmethod
+def get_default_options(cls) -> ConvertPipelineOptions
+```
+
+<ResponseField name="return" type="ConvertPipelineOptions">
+  Default configuration for SimplePipeline
+</ResponseField>
+
+### is_backend_supported
+
+Checks if a backend is supported by this pipeline.
+
+```python
+@classmethod
+def is_backend_supported(cls, backend: AbstractDocumentBackend) -> bool
+```
+
+<ParamField path="backend" type="AbstractDocumentBackend" required>
+  Backend instance to check
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  True if backend is DeclarativeDocumentBackend, False otherwise
+</ResponseField>
+
+## Supported Backends
+
+SimplePipeline requires backends that implement `DeclarativeDocumentBackend`, which can output a `DoclingDocument` directly. Examples include:
+
+- Markdown backend
+- HTML backend
+- Other declarative format backends
+
+## Processing Flow
+
+Unlike paginated pipelines, SimplePipeline:
+
+1. Calls the backend's `convert()` method directly
+2. Receives a complete `DoclingDocument` from the backend
+3. Optionally applies enrichment models (picture classification, description, etc.)
+4. Returns the result with `SUCCESS` status
+
+## Usage Example
+
+```python
+from docling.pipeline.simple_pipeline import SimplePipeline
+from docling.datamodel.pipeline_options import ConvertPipelineOptions
+from docling.datamodel.document import InputDocument
+from docling.datamodel.base_models import InputFormat
+
+# Configure pipeline
+options = ConvertPipelineOptions(
+    do_picture_description=True
+)
+
+# Create pipeline
+pipeline = SimplePipeline(pipeline_options=options)
+
+# Process Markdown document
+input_doc = InputDocument(
+    path_or_stream="document.md",
+    format=InputFormat.MD
+)
+result = pipeline.execute(input_doc, raises_on_error=False)
+
+if result.status == ConversionStatus.SUCCESS:
+    doc = result.document
+    print(doc.export_to_markdown())
+```
+
+## Error Handling
+
+The pipeline raises a `RuntimeError` if:
+- The backend is not a `DeclarativeDocumentBackend`
+- The backend's `convert()` method fails
+
+Set `raises_on_error=False` in `execute()` to capture errors in `ConversionResult.errors` instead.
+
+## When to Use
+
+Use `SimplePipeline` when:
+- Working with declarative formats (Markdown, HTML, etc.)
+- The backend can produce complete document structure directly
+- Page-level processing is not required
+- Simple, fast conversion is needed
+
+For PDF documents or formats requiring multi-stage processing, use `StandardPdfPipeline` instead.

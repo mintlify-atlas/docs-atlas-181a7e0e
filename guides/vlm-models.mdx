@@ -1,0 +1,497 @@
+---
+title: Vision Language Models (VLM)
+description: Use vision-language models for end-to-end document understanding with SmolDocling, Granite Docling, and other VLMs
+---
+
+## Overview
+
+Vision-Language Models (VLMs) enable end-to-end document understanding by processing document pages as images and directly generating structured output. This approach is an alternative to the traditional pipeline (layout analysis + OCR + table extraction).
+
+Docling's `VlmPipeline` supports:
+
+- **Local models**: Run models on your hardware (CPU, GPU, Apple Silicon)
+- **Multiple frameworks**: Transformers, MLX (Apple Silicon optimized)
+- **Remote models**: Connect to vLLM, Ollama, or cloud APIs
+- **Multiple output formats**: DocTags (preferred), Markdown, HTML
+
+## Quick Start
+
+The simplest way to use VLM with Docling:
+
+<Tabs>
+  <Tab title="CLI">
+    ```bash
+    # Uses default VLM (Granite Docling)
+    docling --pipeline vlm document.pdf
+
+    # Specify a different model
+    docling --pipeline vlm --vlm-model smoldocling document.pdf
+
+    # With MLX acceleration on Apple Silicon
+    docling --pipeline vlm --vlm-model granite_docling document.pdf
+    ```
+  </Tab>
+  <Tab title="Python (Default)">
+    ```python
+    from docling.datamodel.base_models import InputFormat
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+    from docling.pipeline.vlm_pipeline import VlmPipeline
+
+    # No configuration needed - uses default VLM (Granite Docling)
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(
+                pipeline_cls=VlmPipeline,
+            ),
+        }
+    )
+
+    result = converter.convert("document.pdf")
+    print(result.document.export_to_markdown())
+    ```
+  </Tab>
+</Tabs>
+
+## Available Models
+
+Docling supports multiple VLM models with different trade-offs:
+
+### Recommended Models
+
+| Model | Framework | Device | Speed | Accuracy | Output Format |
+|-------|-----------|--------|-------|----------|---------------|
+| **Granite Docling** | Transformers/MLX | CPU/GPU/MPS | Fast | Excellent | DocTags |
+| **SmolDocling** | Transformers/MLX | CPU/GPU/MPS | Very Fast | Good | DocTags |
+| **Qwen 2.5 VL** | MLX | MPS | Medium | Excellent | Markdown |
+| **Pixtral** | Transformers/MLX | CPU/GPU/MPS | Slow | Excellent | Markdown |
+| **Granite Vision** | Transformers | CPU/GPU/MPS | Medium | Good | Markdown |
+
+<Note>
+**DocTags** is the preferred output format - it's a structured document representation that Docling converts to `DoclingDocument` for consistent export to Markdown, HTML, JSON, etc.
+</Note>
+
+## Using Presets
+
+The recommended way to configure VLMs is with presets:
+
+```python
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    VlmPipelineOptions,
+    VlmConvertOptions,
+)
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.pipeline.vlm_pipeline import VlmPipeline
+
+# Use a preset by name
+vlm_options = VlmConvertOptions.from_preset("smoldocling")
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_cls=VlmPipeline,
+            pipeline_options=VlmPipelineOptions(vlm_options=vlm_options),
+        ),
+    }
+)
+
+result = converter.convert("document.pdf")
+```
+
+### Available Presets
+
+<Tabs>
+  <Tab title="Granite Docling (Default)">
+    ```python
+    vlm_options = VlmConvertOptions.from_preset("granite_docling")
+    ```
+
+    **Model:** [ibm-granite/granite-docling-258M](https://huggingface.co/ibm-granite/granite-docling-258M)
+    
+    **Best for:** Production use, balanced speed/accuracy, DocTags output
+    
+    **Auto-selects:**
+    - MLX variant on Apple Silicon
+    - Transformers variant on other platforms
+  </Tab>
+  
+  <Tab title="SmolDocling">
+    ```python
+    vlm_options = VlmConvertOptions.from_preset("smoldocling")
+    ```
+
+    **Model:** [ds4sd/SmolDocling-256M-preview](https://huggingface.co/ds4sd/SmolDocling-256M-preview)
+    
+    **Best for:** Fast processing, lightweight deployment, DocTags output
+    
+    **Speed:** ~6s per page on M3 Max (MLX)
+  </Tab>
+  
+  <Tab title="Qwen 2.5 VL">
+    ```python
+    vlm_options = VlmConvertOptions.from_preset("qwen25vl_3b")
+    ```
+
+    **Model:** [Qwen2.5-VL-3B](https://huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct)
+    
+    **Best for:** High accuracy, Markdown output, multilingual
+    
+    **Speed:** ~23s per page on M3 Max (MLX)
+  </Tab>
+  
+  <Tab title="Pixtral 12B">
+    ```python
+    vlm_options = VlmConvertOptions.from_preset("pixtral_12b")
+    ```
+
+    **Model:** [mistral-community/pixtral-12b](https://huggingface.co/mistral-community/pixtral-12b)
+    
+    **Best for:** Maximum accuracy, complex documents
+    
+    **Speed:** ~309s per page on M3 Max (MLX), slower on CPU
+  </Tab>
+</Tabs>
+
+## Runtime Selection
+
+Control which inference framework to use:
+
+<Tabs>
+  <Tab title="Auto (Recommended)">
+    ```python
+    from docling.datamodel.pipeline_options import VlmConvertOptions
+
+    # Automatically selects best runtime for your platform
+    vlm_options = VlmConvertOptions.from_preset("granite_docling")
+    # Uses MLX on Apple Silicon, Transformers elsewhere
+    ```
+  </Tab>
+  
+  <Tab title="MLX (Apple Silicon)">
+    ```python
+    from docling.datamodel.pipeline_options import VlmConvertOptions
+    from docling.datamodel.vlm_engine_options import MlxVlmEngineOptions
+
+    vlm_options = VlmConvertOptions.from_preset(
+        "granite_docling",
+        engine_options=MlxVlmEngineOptions(),
+    )
+    ```
+
+    **Requirements:**
+    ```bash
+    pip install "docling[vlm,mlx]"
+    ```
+
+    **Best for:** Apple Silicon (M1/M2/M3) - 10-20x faster than Transformers
+  </Tab>
+  
+  <Tab title="Transformers">
+    ```python
+    from docling.datamodel.pipeline_options import VlmConvertOptions
+    from docling.datamodel.vlm_engine_options import TransformersVlmEngineOptions
+
+    vlm_options = VlmConvertOptions.from_preset(
+        "granite_docling",
+        engine_options=TransformersVlmEngineOptions(),
+    )
+    ```
+
+    **Requirements:**
+    ```bash
+    pip install "docling[vlm]"
+    ```
+
+    **Best for:** CUDA GPUs, general compatibility
+  </Tab>
+</Tabs>
+
+## Remote Models (API)
+
+Connect to models hosted on remote servers:
+
+### vLLM Server
+
+<Steps>
+
+<Step title="Start vLLM Server">
+```bash
+pip install vllm
+
+vllm serve ibm-granite/granite-docling-258M \
+  --dtype bfloat16 \
+  --max-model-len 4096
+```
+</Step>
+
+<Step title="Configure Docling">
+```python
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    VlmPipelineOptions,
+    ApiVlmOptions,
+)
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.pipeline.vlm_pipeline import VlmPipeline
+
+pipeline_options = VlmPipelineOptions(
+    enable_remote_services=True,  # Required!
+    vlm_options=ApiVlmOptions(
+        url="http://localhost:8000/v1/chat/completions",
+        model="ibm-granite/granite-docling-258M",
+        api_key=None,  # If required
+    ),
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_cls=VlmPipeline,
+            pipeline_options=pipeline_options,
+        )
+    }
+)
+
+result = converter.convert("document.pdf")
+```
+</Step>
+
+</Steps>
+
+### Ollama
+
+<Steps>
+
+<Step title="Start Ollama with a VLM">
+```bash
+# Pull a vision model
+ollama pull llava:7b
+
+# Start Ollama server (usually auto-starts)
+ollama serve
+```
+</Step>
+
+<Step title="Configure Docling">
+```python
+from docling.datamodel.pipeline_options import (
+    VlmPipelineOptions,
+    ApiVlmOptions,
+)
+from docling.datamodel.vlm_engine_options import VlmEngineType
+
+pipeline_options = VlmPipelineOptions(
+    enable_remote_services=True,
+    vlm_options=ApiVlmOptions(
+        url="http://localhost:11434/v1/chat/completions",
+        model="llava:7b",
+        engine_type=VlmEngineType.API_OLLAMA,
+    ),
+)
+```
+</Step>
+
+</Steps>
+
+## VLM Configuration Options
+
+Customize VLM behavior:
+
+```python
+from docling.datamodel.pipeline_options import (
+    VlmPipelineOptions,
+    VlmConvertOptions,
+)
+
+vlm_options = VlmConvertOptions.from_preset("granite_docling")
+
+pipeline_options = VlmPipelineOptions(
+    vlm_options=vlm_options,
+    
+    # Image preprocessing
+    generate_page_images=True,  # Required for VLM
+    force_backend_text=False,   # Use VLM text vs. PDF text
+    
+    # Picture enrichment (optional)
+    do_picture_description=True,
+    do_picture_classification=True,
+)
+```
+
+### Image Scaling
+
+Control input image resolution:
+
+```python
+from docling.datamodel.pipeline_options import VlmConvertOptions
+
+vlm_options = VlmConvertOptions.from_preset("granite_docling")
+vlm_options.scale = 2.0      # Image scale factor (2.0 = high res)
+vlm_options.max_size = 1024  # Max dimension (width/height)
+```
+
+Higher scale = better accuracy but slower processing.
+
+## Manual Configuration (Without Presets)
+
+For full control, manually configure the VLM:
+
+```python
+from docling.datamodel.pipeline_options_vlm_model import (
+    InlineVlmOptions,
+    InferenceFramework,
+    ResponseFormat,
+    TransformersModelType,
+)
+from docling.datamodel.pipeline_options import VlmPipelineOptions
+from docling.datamodel.accelerator_options import AcceleratorDevice
+
+pipeline_options = VlmPipelineOptions(
+    vlm_options=InlineVlmOptions(
+        repo_id="ibm-granite/granite-vision-3.2-2b",
+        prompt="Convert this page to markdown. Do not miss any text and only output the bare markdown!",
+        response_format=ResponseFormat.MARKDOWN,
+        inference_framework=InferenceFramework.TRANSFORMERS,
+        transformers_model_type=TransformersModelType.AUTOMODEL_VISION2SEQ,
+        supported_devices=[
+            AcceleratorDevice.CPU,
+            AcceleratorDevice.CUDA,
+            AcceleratorDevice.MPS,
+        ],
+        scale=2.0,
+        temperature=0.0,
+    )
+)
+```
+
+## Picture Description with VLMs
+
+Use VLMs to caption images within documents:
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    PictureDescriptionVlmEngineOptions,
+)
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions(
+    do_picture_description=True,
+    picture_description_options=PictureDescriptionVlmEngineOptions.from_preset(
+        "smolvlm"  # or "granite_vision", "pixtral", "qwen"
+    ),
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+result = converter.convert("document.pdf")
+
+# Access picture descriptions
+from docling_core.types.doc import PictureItem
+
+for item, level in result.document.iterate_items():
+    if isinstance(item, PictureItem):
+        print(f"Picture: {item.self_ref}")
+        print(f"Caption: {item.caption_text(doc=result.document)}")
+```
+
+## Performance Benchmarks
+
+Benchmarked on M3 Max with single test page:
+
+| Model | Framework | Time (sec) | Memory |
+|-------|-----------|------------|--------|
+| SmolDocling | MLX | 6.2 | Low |
+| SmolDocling | Transformers | 102.2 | Medium |
+| Granite Docling | MLX | ~8 | Low |
+| Qwen 2.5 VL 3B | MLX | 23.5 | Medium |
+| Pixtral 12B | MLX | 308.9 | High |
+| Gemma 3 12B | MLX | 378.5 | High |
+| Phi-4 | Transformers (CPU) | 1175.7 | Medium |
+
+<Note>
+MLX provides 10-20x speedup on Apple Silicon compared to Transformers. Always use MLX on M1/M2/M3 devices.
+</Note>
+
+## When to Use VLM vs. Traditional Pipeline
+
+<CardGroup cols={2}>
+  <Card title="Use VLM When" icon="check">
+    - Documents have complex layouts
+    - Mixed content types (text, tables, images)
+    - Handwritten or unusual fonts
+    - You want end-to-end learning
+    - Simplicity over control
+  </Card>
+  
+  <Card title="Use Traditional Pipeline When" icon="wrench">
+    - You need fine-grained control
+    - Processing simple, structured PDFs
+    - OCR customization is critical
+    - Resources are limited (VLM needs more memory)
+    - Batch processing at scale
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Model download fails">
+    Pre-download models:
+    
+    ```bash
+    docling-tools models download-hf-repo ibm-granite/granite-docling-258M
+    ```
+    
+    Then set `artifacts_path`:
+    ```python
+    pipeline_options.artifacts_path = "/path/to/models"
+    ```
+  </Accordion>
+  
+  <Accordion title="Out of memory errors">
+    - Use smaller models (SmolDocling instead of Pixtral)
+    - Reduce `scale` parameter: `vlm_options.scale = 1.0`
+    - Set `max_size`: `vlm_options.max_size = 768`
+    - Process fewer pages at once
+  </Accordion>
+  
+  <Accordion title="MLX not using GPU">
+    Verify MLX installation:
+    ```bash
+    pip install mlx mlx-vlm
+    python -c "import mlx.core as mx; print(mx.metal.is_available())"
+    ```
+    
+    Should print `True` on Apple Silicon.
+  </Accordion>
+  
+  <Accordion title="Poor quality results">
+    - Increase image scale: `vlm_options.scale = 2.0`
+    - Try a larger model (Qwen, Pixtral)
+    - Check prompt is appropriate for your content
+    - Use Granite Docling or SmolDocling for DocTags output (better structure)
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="PDF Processing" icon="file-pdf" href="/guides/pdf-processing">
+    Compare with traditional PDF pipeline options
+  </Card>
+  <Card title="Export Formats" icon="file-export" href="/guides/export-formats">
+    Export VLM-processed documents to various formats
+  </Card>
+  <Card title="Batch Processing" icon="layer-group" href="/guides/batch-processing">
+    Optimize VLM processing for document batches
+  </Card>
+  <Card title="Advanced Options" icon="sliders" href="/guides/advanced-options">
+    Configure hardware acceleration and remote services
+  </Card>
+</CardGroup>

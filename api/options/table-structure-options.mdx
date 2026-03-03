@@ -1,0 +1,253 @@
+---
+title: TableStructureOptions
+description: Configuration for table structure extraction models
+---
+
+## Overview
+
+Table structure options configure how Docling extracts and reconstructs table structures from documents. The TableFormer model analyzes table layouts, identifies cells, rows, and columns, and reconstructs the logical structure.
+
+## TableStructureOptions
+
+Configuration for table structure extraction using the TableFormer model.
+
+```python
+from docling.datamodel.pipeline_options import TableStructureOptions, TableFormerMode
+
+options = TableStructureOptions(
+    do_cell_matching=True,
+    mode=TableFormerMode.ACCURATE
+)
+```
+
+### Parameters
+
+<ParamField path="kind" type="Literal['docling_tableformer']" default="'docling_tableformer'">
+  Model type identifier. Always set to `"docling_tableformer"` for TableFormer-based extraction.
+</ParamField>
+
+<ParamField path="do_cell_matching" type="bool" default="True">
+  Enable cell matching to align detected table cells with their content.
+  
+  When enabled, the model attempts to match table structure predictions with actual cell content for improved accuracy. This ensures that detected cell boundaries correctly correspond to the text or data within them.
+</ParamField>
+
+<ParamField path="mode" type="TableFormerMode" default="TableFormerMode.ACCURATE">
+  Table structure extraction mode. Controls the trade-off between processing speed and extraction accuracy.
+  
+  **Options:**
+  - `TableFormerMode.ACCURATE` - Higher quality results with slower processing. **Recommended for production use.**
+  - `TableFormerMode.FAST` - Prioritizes speed over precision. Suitable for simple tables or high-volume processing.
+  
+  Choose based on your performance requirements and document complexity.
+</ParamField>
+
+## TableFormerMode
+
+Operating modes for TableFormer table structure extraction model.
+
+```python
+from docling.datamodel.pipeline_options import TableFormerMode
+
+# Use accurate mode (recommended)
+mode = TableFormerMode.ACCURATE
+
+# Use fast mode for high-volume processing
+mode = TableFormerMode.FAST
+```
+
+### Values
+
+<ResponseField name="FAST" type="str">
+  Fast mode prioritizes speed over precision. Suitable for simple tables or high-volume processing where some accuracy can be traded for performance.
+</ResponseField>
+
+<ResponseField name="ACCURATE" type="str">
+  Accurate mode provides higher quality results with slower processing. Recommended for complex tables and production use where accuracy is critical.
+</ResponseField>
+
+## Usage
+
+### Basic Configuration
+
+```python
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TableStructureOptions,
+    TableFormerMode
+)
+
+# Configure table structure extraction
+table_options = TableStructureOptions(
+    do_cell_matching=True,
+    mode=TableFormerMode.ACCURATE
+)
+
+pipeline_options = PdfPipelineOptions(
+    do_table_structure=True,
+    table_structure_options=table_options
+)
+
+converter = DocumentConverter(
+    format_options={
+        PdfFormatOption: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+result = converter.convert("document_with_tables.pdf")
+```
+
+### Fast Mode for High-Volume Processing
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TableStructureOptions,
+    TableFormerMode
+)
+
+# Fast mode for processing many simple documents
+table_options = TableStructureOptions(
+    mode=TableFormerMode.FAST
+)
+
+pipeline_options = PdfPipelineOptions(
+    do_table_structure=True,
+    table_structure_options=table_options
+)
+```
+
+### Disable Cell Matching
+
+For very simple tables where cell boundaries are well-defined:
+
+```python
+table_options = TableStructureOptions(
+    do_cell_matching=False,  # Skip cell matching for speed
+    mode=TableFormerMode.FAST
+)
+```
+
+## Performance Considerations
+
+<AccordionGroup>
+  <Accordion title="ACCURATE Mode">
+    **Best for:**
+    - Complex tables with merged cells, nested structures
+    - Financial documents, spreadsheets, scientific papers
+    - Production environments where accuracy is critical
+    
+    **Trade-offs:**
+    - Slower processing (2-3x compared to FAST mode)
+    - Higher memory usage
+    - Better handling of edge cases
+  </Accordion>
+  
+  <Accordion title="FAST Mode">
+    **Best for:**
+    - Simple, well-structured tables
+    - High-volume batch processing
+    - Preview or draft conversions
+    - Documents with limited table complexity
+    
+    **Trade-offs:**
+    - Faster processing
+    - Lower memory footprint
+    - May miss complex cell relationships
+  </Accordion>
+</AccordionGroup>
+
+## Table Structure Output
+
+Table structure extraction produces `TableItem` objects with detailed cell information:
+
+```python
+result = converter.convert("document.pdf")
+
+for table_item, _ in result.document.iterate_items(traverse_pictures=False):
+    if isinstance(table_item, TableItem):
+        data = table_item.data
+        print(f"Table: {data.num_rows} rows × {data.num_cols} cols")
+        
+        for cell in data.table_cells:
+            print(f"Cell ({cell.start_row_offset_idx},{cell.start_col_offset_idx}): {cell.text}")
+            print(f"  Spans: {cell.row_span} rows × {cell.col_span} cols")
+            print(f"  Header: column={cell.column_header}, row={cell.row_header}")
+```
+
+## Cell Matching Details
+
+When `do_cell_matching=True`, the TableFormer model:
+
+1. **Detects table structure** - Identifies row and column boundaries
+2. **Locates cell content** - Finds text regions within detected cells
+3. **Aligns content to cells** - Matches text to the correct cell boundaries
+4. **Handles merged cells** - Correctly identifies cells spanning multiple rows/columns
+5. **Validates structure** - Ensures consistency between structure and content
+
+This multi-step process improves accuracy but increases processing time.
+
+## BaseTableStructureOptions
+
+Abstract base class for all table structure extraction models. Currently, `TableStructureOptions` is the only concrete implementation using the TableFormer model.
+
+```python
+from docling.datamodel.pipeline_options import BaseTableStructureOptions
+
+# Use concrete implementation
+from docling.datamodel.pipeline_options import TableStructureOptions
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Tables not detected">
+    Ensure `do_table_structure=True` in your pipeline options:
+    
+    ```python
+    pipeline_options = PdfPipelineOptions(
+        do_table_structure=True,  # Must be enabled
+        table_structure_options=TableStructureOptions()
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Incorrect cell boundaries">
+    Try ACCURATE mode with cell matching enabled:
+    
+    ```python
+    table_options = TableStructureOptions(
+        do_cell_matching=True,
+        mode=TableFormerMode.ACCURATE
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Slow processing">
+    For faster processing on simple tables:
+    
+    ```python
+    table_options = TableStructureOptions(
+        mode=TableFormerMode.FAST
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Memory issues">
+    Reduce batch size for table processing:
+    
+    ```python
+    pipeline_options = PdfPipelineOptions(
+        do_table_structure=True,
+        table_structure_batch_size=2  # Smaller batches
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## See Also
+
+- [Pipeline Options](/api/options/pipeline-options) - Pipeline configuration
+- [PDF Processing](/guides/pdf-processing) - Table extraction guide
+- [DoclingDocument](/api/docling-document) - Document data structure

@@ -1,0 +1,238 @@
+---
+title: 'ConversionResult'
+description: 'Result object containing the converted document and conversion metadata'
+---
+
+## Overview
+
+`ConversionResult` is returned by all `DocumentConverter` conversion methods. It extends `ConversionAssets` and contains the converted `DoclingDocument` along with metadata about the conversion process, including status, errors, timing information, and page-level data.
+
+## Class Definition
+
+```python
+from docling.datamodel.document import ConversionResult
+```
+
+## Inheritance
+
+`ConversionResult` extends `ConversionAssets` and inherits all its attributes and methods.
+
+## Attributes
+
+### Core Attributes
+
+<ResponseField name="document" type="DoclingDocument">
+  The converted Docling document. This is the primary output of the conversion process.
+</ResponseField>
+
+<ResponseField name="input" type="InputDocument">
+  The input document metadata, including file path, format, and validation status.
+</ResponseField>
+
+<ResponseField name="status" type="ConversionStatus">
+  The status of the conversion. Possible values:
+  - `ConversionStatus.SUCCESS` - Conversion completed successfully
+  - `ConversionStatus.PARTIAL_SUCCESS` - Conversion completed with some issues
+  - `ConversionStatus.FAILURE` - Conversion failed
+  - `ConversionStatus.PENDING` - Conversion not yet started
+  - `ConversionStatus.SKIPPED` - Document was skipped
+</ResponseField>
+
+<ResponseField name="errors" type="list[ErrorItem]">
+  List of errors that occurred during conversion. Each `ErrorItem` contains:
+  - `component_type`: The component where the error occurred
+  - `module_name`: The module that raised the error
+  - `error_message`: Description of the error
+</ResponseField>
+
+### Metadata Attributes
+
+<ResponseField name="pages" type="list[Page]">
+  List of page-level metadata for paginated documents. Each `Page` contains information about dimensions, page number, and page-specific content.
+</ResponseField>
+
+<ResponseField name="timings" type="dict[str, ProfilingItem]">
+  Timing information for different stages of the conversion process.
+</ResponseField>
+
+<ResponseField name="confidence" type="ConfidenceReport">
+  Confidence scores for various aspects of the conversion.
+</ResponseField>
+
+<ResponseField name="assembled" type="AssembledUnit">
+  Information about how the document was assembled from its components.
+</ResponseField>
+
+<ResponseField name="version" type="DoclingVersion">
+  Version information about Docling and its dependencies used for the conversion.
+</ResponseField>
+
+<ResponseField name="timestamp" type="str" optional>
+  ISO timestamp when the conversion assets were saved.
+</ResponseField>
+
+## Methods
+
+### `save()`
+
+Serialize the full ConversionResult to a compressed ZIP archive.
+
+```python
+result.save(filename="output.zip", indent=2)
+```
+
+<ParamField path="filename" type="Union[str, Path]" required>
+  Path where the ZIP archive will be saved.
+</ParamField>
+
+<ParamField path="indent" type="int" default="2">
+  Number of spaces for JSON indentation. Use `None` for compact output.
+</ParamField>
+
+The saved archive contains:
+- `document.json` - The DoclingDocument
+- `version.json` - Version information
+- `status.json` - Conversion status
+- `errors.json` - Error list
+- `pages.json` - Page metadata
+- `timings.json` - Performance timings
+- `confidence.json` - Confidence scores
+- `timestamp.json` - Save timestamp
+
+---
+
+### `load()`
+
+Load a ConversionResult from a saved ZIP archive.
+
+```python
+result = ConversionResult.load("output.zip")
+```
+
+<ParamField path="filename" type="Union[str, Path]" required>
+  Path to the ZIP archive to load.
+</ParamField>
+
+<ResponseField name="return" type="ConversionResult">
+  The loaded ConversionResult instance.
+</ResponseField>
+
+## Usage Examples
+
+### Basic Conversion
+
+```python
+from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import ConversionStatus
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+# Check conversion status
+if result.status == ConversionStatus.SUCCESS:
+    print("Conversion successful!")
+    print(f"Document name: {result.document.name}")
+    print(f"Number of pages: {len(result.pages)}")
+else:
+    print(f"Conversion failed with status: {result.status}")
+    for error in result.errors:
+        print(f"Error: {error.error_message}")
+```
+
+### Accessing the Document
+
+```python
+result = converter.convert("document.pdf")
+
+# Get the DoclingDocument
+doc = result.document
+
+# Export to different formats
+markdown_text = doc.export_to_markdown()
+html_text = doc.export_to_html()
+json_dict = doc.export_to_dict()
+
+# Access document structure
+for item in doc.iterate_items():
+    print(f"{item.label}: {item.get_text()}")
+```
+
+### Error Handling
+
+```python
+converter = DocumentConverter()
+
+# Don't raise on errors
+result = converter.convert("document.pdf", raises_on_error=False)
+
+if result.status != ConversionStatus.SUCCESS:
+    print(f"Conversion status: {result.status}")
+    
+    # Examine errors
+    for error in result.errors:
+        print(f"Component: {error.component_type}")
+        print(f"Module: {error.module_name}")
+        print(f"Message: {error.error_message}")
+```
+
+### Saving and Loading Results
+
+```python
+# Convert and save
+result = converter.convert("document.pdf")
+result.save(filename="conversion_output.zip")
+
+# Later, load the result
+from docling.datamodel.document import ConversionResult
+
+loaded_result = ConversionResult.load("conversion_output.zip")
+print(f"Loaded document: {loaded_result.document.name}")
+print(f"Original conversion time: {loaded_result.timestamp}")
+```
+
+### Batch Processing with Results
+
+```python
+converter = DocumentConverter()
+documents = ["doc1.pdf", "doc2.docx", "doc3.html"]
+
+results = []
+for result in converter.convert_all(documents, raises_on_error=False):
+    results.append(result)
+    
+    if result.status == ConversionStatus.SUCCESS:
+        print(f"✓ {result.input.file.name}")
+    else:
+        print(f"✗ {result.input.file.name}: {result.status}")
+
+# Generate summary
+success_count = sum(1 for r in results if r.status == ConversionStatus.SUCCESS)
+print(f"\nSuccessfully converted {success_count}/{len(results)} documents")
+```
+
+### Accessing Timing Information
+
+```python
+result = converter.convert("document.pdf")
+
+# View performance timings
+for stage, timing in result.timings.items():
+    print(f"{stage}: {timing.duration:.2f}s")
+```
+
+### Page-Level Information
+
+```python
+result = converter.convert("document.pdf")
+
+# Access page metadata
+for i, page in enumerate(result.pages, 1):
+    print(f"Page {i}:")
+    print(f"  Size: {page.size.width} x {page.size.height}")
+    print(f"  Page number: {page.page_number}")
+```
+
+## See Also
+
+- [DocumentConverter](/api/document-converter) - Main class for document conversion
+- [DoclingDocument](/api/docling-document) - The document object structure

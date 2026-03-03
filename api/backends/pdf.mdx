@@ -1,0 +1,454 @@
+---
+title: PDF Backend
+description: PDF document parsing and extraction
+---
+
+## Overview
+
+The PDF backend provides advanced PDF parsing capabilities with multiple extraction strategies. It serves as the foundation for Docling's PDF processing pipeline, extracting raw content before ML-based analysis stages.
+
+## Architecture
+
+PDF processing in Docling uses a two-tier backend architecture:
+
+1. **Document Backend (`PdfDocumentBackend`)** - Manages the PDF file and coordinates page access
+2. **Page Backend (`PdfPageBackend`)** - Handles individual page parsing and content extraction
+
+```python
+from docling.backend.pdf_backend import PdfDocumentBackend
+
+# Initialize document backend
+backend = PdfDocumentBackend(
+    in_doc=input_document,
+    path_or_stream=pdf_path,
+    options=PdfBackendOptions()
+)
+
+# Access individual pages
+for page_no in range(backend.page_count()):
+    page_backend = backend.load_page(page_no)
+    # Extract page content
+    text = page_backend.get_text_in_rect(bbox)
+    cells = page_backend.get_text_cells()
+    page_backend.unload()
+```
+
+## PdfDocumentBackend
+
+Main interface for PDF document parsing.
+
+### Methods
+
+<ResponseField name="page_count()" type="int">
+  Returns the total number of pages in the PDF document.
+  
+  ```python
+  num_pages = backend.page_count()
+  ```
+</ResponseField>
+
+<ResponseField name="load_page(page_no)" type="PdfPageBackend">
+  Loads a specific page for processing (0-indexed).
+  
+  **Parameters:**
+  - `page_no` (int): Page index (0-based)
+  
+  **Returns:** Page backend instance
+  
+  ```python
+  page = backend.load_page(0)  # First page
+  ```
+</ResponseField>
+
+<ResponseField name="is_valid()" type="bool">
+  Check if the PDF was successfully loaded.
+  
+  ```python
+  if backend.is_valid():
+      # Process document
+  ```
+</ResponseField>
+
+<ResponseField name="unload()" type="None">
+  Free resources and close the PDF file.
+  
+  ```python
+  backend.unload()
+  ```
+</ResponseField>
+
+<ResponseField name="supported_formats()" type="set[InputFormat]" classmethod>
+  Returns `{InputFormat.PDF}`
+</ResponseField>
+
+## PdfPageBackend
+
+Interface for extracting content from individual PDF pages.
+
+### Methods
+
+<ResponseField name="get_text_in_rect(bbox)" type="str">
+  Extract text within a specific bounding box on the page.
+  
+  **Parameters:**
+  - `bbox` (BoundingBox): Region to extract text from
+  
+  **Returns:** Extracted text string
+  
+  ```python
+  from docling_core.types.doc import BoundingBox
+  
+  bbox = BoundingBox(l=100, t=100, r=400, b=200)
+  text = page.get_text_in_rect(bbox)
+  ```
+</ResponseField>
+
+<ResponseField name="get_segmented_page()" type="SegmentedPdfPage | None">
+  Get the segmented page representation with text cells and layout information.
+  
+  Returns detailed page structure including character, word, and line level text cells.
+  
+  ```python
+  seg_page = page.get_segmented_page()
+  if seg_page:
+      for cell in seg_page.textline_cells:
+          print(cell.text)
+  ```
+</ResponseField>
+
+<ResponseField name="get_text_cells()" type="Iterable[TextCell]">
+  Get all text cells on the page.
+  
+  **Returns:** Iterator of TextCell objects
+  
+  ```python
+  for cell in page.get_text_cells():
+      print(f"Text: {cell.text}, BBox: {cell.bbox}")
+  ```
+</ResponseField>
+
+<ResponseField name="get_bitmap_rects(scale)" type="Iterable[BoundingBox]">
+  Get bounding boxes of bitmap/image regions on the page.
+  
+  **Parameters:**
+  - `scale` (float): Scaling factor for coordinates (default: 1.0)
+  
+  **Returns:** Iterator of bounding boxes
+  
+  ```python
+  for bbox in page.get_bitmap_rects(scale=2.0):
+      print(f"Image at: {bbox}")
+  ```
+</ResponseField>
+
+<ResponseField name="get_page_image(scale, cropbox)" type="Image.Image">
+  Render the page as an image.
+  
+  **Parameters:**
+  - `scale` (float): Resolution scaling factor (default: 1.0)
+  - `cropbox` (BoundingBox | None): Optional crop region
+  
+  **Returns:** PIL Image object
+  
+  ```python
+  # Full page at 2x resolution
+  img = page.get_page_image(scale=2.0)
+  
+  # Cropped region
+  bbox = BoundingBox(l=0, t=0, r=400, b=600)
+  cropped = page.get_page_image(scale=1.0, cropbox=bbox)
+  ```
+</ResponseField>
+
+<ResponseField name="get_size()" type="Size">
+  Get the page dimensions.
+  
+  **Returns:** Size object with width and height
+  
+  ```python
+  size = page.get_size()
+  print(f"Page: {size.width} x {size.height}")
+  ```
+</ResponseField>
+
+<ResponseField name="is_valid()" type="bool">
+  Check if the page was successfully loaded.
+</ResponseField>
+
+<ResponseField name="unload()" type="None">
+  Free page resources.
+</ResponseField>
+
+## PDF Backend Implementations
+
+Docling provides multiple PDF parsing backends, each with different capabilities:
+
+### PYPDFIUM2 Backend
+
+Standard PDF parser using the PyPDFium2 library.
+
+**Characteristics:**
+- Fast and reliable for basic text extraction
+- Good compatibility with most PDFs
+- Standard text cell extraction
+- Lightweight and stable
+
+**Best for:**
+- Text-based PDFs with embedded fonts
+- Documents with simple layouts
+- Fast batch processing
+
+### DOCLING_PARSE Backend
+
+Docling's advanced parsing backend with enhanced capabilities.
+
+**Characteristics:**
+- Enhanced layout analysis
+- Better structure preservation
+- Improved table detection
+- Advanced text cell extraction
+- Complex layout handling
+
+**Best for:**
+- Complex documents with multi-column layouts
+- Documents with tables and figures
+- Scientific papers and technical documents
+- Production environments requiring high accuracy
+
+## Configuration
+
+### Backend Options
+
+Configure PDF backend behavior:
+
+```python
+from docling.datamodel.backend_options import PdfBackendOptions
+from pydantic import SecretStr
+
+options = PdfBackendOptions(
+    password=SecretStr("document_password"),
+    enable_remote_fetch=False,
+    enable_local_fetch=False
+)
+```
+
+See [PdfBackendOptions](/api/options/pdf-backend-options) for details.
+
+### Selecting Backend
+
+Backend selection is automatic but can be influenced through pipeline configuration:
+
+```python
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    do_table_structure=True,
+    # Backend automatically selected based on document
+)
+```
+
+## Usage Examples
+
+### Basic Text Extraction
+
+```python
+from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+from docling.datamodel.document import InputDocument
+from pathlib import Path
+
+input_doc = InputDocument(
+    path_or_stream=Path("document.pdf"),
+    format=InputFormat.PDF
+)
+
+backend = PyPdfiumDocumentBackend(
+    in_doc=input_doc,
+    path_or_stream=Path("document.pdf")
+)
+
+if backend.is_valid():
+    for page_no in range(backend.page_count()):
+        page = backend.load_page(page_no)
+        
+        # Get all text cells
+        for cell in page.get_text_cells():
+            print(f"Page {page_no + 1}: {cell.text}")
+        
+        page.unload()
+    
+    backend.unload()
+```
+
+### Extract Page Images
+
+```python
+from PIL import Image
+
+backend = PyPdfiumDocumentBackend(...)
+
+for page_no in range(backend.page_count()):
+    page = backend.load_page(page_no)
+    
+    # Render at 2x resolution
+    img = page.get_page_image(scale=2.0)
+    img.save(f"page_{page_no + 1}.png")
+    
+    page.unload()
+
+backend.unload()
+```
+
+### Extract Text from Specific Regions
+
+```python
+from docling_core.types.doc import BoundingBox, CoordOrigin
+
+page = backend.load_page(0)
+
+# Define region (coordinates in PDF units)
+header_bbox = BoundingBox(
+    l=50, t=50, r=550, b=150,
+    coord_origin=CoordOrigin.TOPLEFT
+)
+
+header_text = page.get_text_in_rect(header_bbox)
+print(f"Header: {header_text}")
+
+page.unload()
+```
+
+### Process Encrypted PDFs
+
+```python
+from docling.datamodel.backend_options import PdfBackendOptions
+from pydantic import SecretStr
+
+options = PdfBackendOptions(
+    password=SecretStr("secret123")
+)
+
+backend = PyPdfiumDocumentBackend(
+    in_doc=input_doc,
+    path_or_stream=pdf_path,
+    options=options
+)
+```
+
+### Concurrent Page Processing
+
+```python
+import concurrent.futures
+
+def process_page(backend, page_no):
+    page = backend.load_page(page_no)
+    try:
+        cells = list(page.get_text_cells())
+        return page_no, cells
+    finally:
+        page.unload()
+
+backend = PyPdfiumDocumentBackend(...)
+
+# Process pages in parallel
+with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    futures = [
+        executor.submit(process_page, backend, i)
+        for i in range(backend.page_count())
+    ]
+    
+    for future in concurrent.futures.as_completed(futures):
+        page_no, cells = future.result()
+        print(f"Page {page_no + 1}: {len(cells)} cells")
+
+backend.unload()
+```
+
+## Performance Considerations
+
+<AccordionGroup>
+  <Accordion title="Memory Management">
+    - Always call `unload()` on pages after processing
+    - Process pages sequentially for low-memory environments
+    - Use page-level parallelism for faster processing
+    - Monitor memory when processing large PDFs
+  </Accordion>
+  
+  <Accordion title="Text Extraction Speed">
+    - `get_text_cells()` is faster than multiple `get_text_in_rect()` calls
+    - Use segmented page for batch text access
+    - Cache page images if used multiple times
+  </Accordion>
+  
+  <Accordion title="Image Rendering">
+    - Higher scale factors increase memory usage significantly
+    - Render only needed regions using cropbox
+    - Use scale=1.0 for preview, scale=2.0+ for OCR
+  </Accordion>
+</AccordionGroup>
+
+## Thread Safety
+
+- **Document Backend**: Not thread-safe for page loading; use one instance per thread
+- **Page Backend**: Thread-safe for read operations after loading
+- **Best Practice**: Create document backend once, load pages concurrently
+
+```python
+# Safe: One backend, concurrent page access
+backend = PyPdfiumDocumentBackend(...)
+
+def process(page_no):
+    page = backend.load_page(page_no)  # Thread-safe
+    result = page.get_text_cells()
+    page.unload()
+    return result
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="PDF won't load">
+    **Possible causes:**
+    - Corrupted PDF file
+    - Unsupported PDF features
+    - Encrypted without password
+    - Invalid file format
+    
+    **Solutions:**
+    ```python
+    if not backend.is_valid():
+        print("Failed to load PDF")
+        # Try with different backend or repair PDF
+    ```
+  </Accordion>
+  
+  <Accordion title="Missing text">
+    **Possible causes:**
+    - Image-based/scanned PDF
+    - Non-embedded fonts
+    - Encrypted content
+    
+    **Solutions:**
+    - Enable OCR in pipeline options
+    - Use DOCLING_PARSE backend
+    - Check if PDF has embedded text layer
+  </Accordion>
+  
+  <Accordion title="Incorrect text order">
+    **Solution:**
+    Use layout analysis pipeline to detect reading order:
+    
+    ```python
+    pipeline_options = PdfPipelineOptions(
+        layout_options=LayoutOptions()
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## See Also
+
+- [PdfBackendOptions](/api/options/pdf-backend-options) - Backend configuration
+- [PdfPipelineOptions](/api/options/pipeline-options#pdfpipelineoptions) - Pipeline settings
+- [Image Backend](/api/backends/image) - Image processing
+- [OCR Options](/api/options/ocr-options) - OCR configuration

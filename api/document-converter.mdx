@@ -1,0 +1,243 @@
+---
+title: 'DocumentConverter'
+description: 'Main class for converting documents of various formats to Docling documents'
+---
+
+## Overview
+
+`DocumentConverter` is the main entry point for converting documents in Docling. It handles various input formats (PDF, DOCX, PPTX, images, HTML, Markdown, etc.) and provides both single-document and batch conversion capabilities.
+
+The conversion methods return a `ConversionResult` instance for each document, which wraps a `DoclingDocument` object if the conversion was successful, along with metadata about the conversion process.
+
+## Class Definition
+
+```python
+from docling.document_converter import DocumentConverter
+```
+
+## Constructor
+
+### `__init__()`
+
+Initialize the converter based on format preferences.
+
+```python
+converter = DocumentConverter(
+    allowed_formats=[InputFormat.PDF, InputFormat.DOCX],
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_options=PipelineOptions(do_ocr=True)
+        )
+    }
+)
+```
+
+<ParamField path="allowed_formats" type="list[InputFormat]" optional>
+  List of allowed input formats. By default, any format supported by Docling is allowed.
+</ParamField>
+
+<ParamField path="format_options" type="dict[InputFormat, FormatOption]" optional>
+  Dictionary of format-specific options. Each format can have custom pipeline and backend configurations.
+</ParamField>
+
+## Attributes
+
+<ResponseField name="allowed_formats" type="list[InputFormat]">
+  Allowed input formats for conversion.
+</ResponseField>
+
+<ResponseField name="format_to_options" type="dict[InputFormat, FormatOption]">
+  Mapping of formats to their configuration options.
+</ResponseField>
+
+<ResponseField name="initialized_pipelines" type="dict[tuple[Type[BasePipeline], str], BasePipeline]">
+  Cache of initialized pipelines keyed by (pipeline class, options hash).
+</ResponseField>
+
+## Methods
+
+### `convert()`
+
+Convert one document fetched from a file path, URL, or DocumentStream.
+
+```python
+result = converter.convert("path/to/document.pdf")
+print(result.document.export_to_markdown())
+```
+
+<ParamField path="source" type="Union[Path, str, DocumentStream]" required>
+  Source of input document given as file path, URL, or DocumentStream.
+</ParamField>
+
+<ParamField path="headers" type="dict[str, str]" optional>
+  Optional headers given as a dictionary of string key-value pairs, in case of URL input source.
+</ParamField>
+
+<ParamField path="raises_on_error" type="bool" default="True">
+  Whether to raise an error on the first conversion failure. If False, errors are captured in the ConversionResult objects.
+</ParamField>
+
+<ParamField path="max_num_pages" type="int" default="sys.maxsize">
+  Maximum number of pages accepted per document. Documents exceeding this number will not be converted.
+</ParamField>
+
+<ParamField path="max_file_size" type="int" default="sys.maxsize">
+  Maximum file size to convert (in bytes).
+</ParamField>
+
+<ParamField path="page_range" type="PageRange" optional>
+  Range of pages to convert.
+</ParamField>
+
+<ResponseField name="return" type="ConversionResult">
+  The conversion result, which contains a `DoclingDocument` in the `document` attribute, and metadata about the conversion process.
+</ResponseField>
+
+**Raises:**
+- `ConversionError`: An error occurred during conversion.
+
+---
+
+### `convert_all()`
+
+Convert multiple documents from file paths, URLs, or DocumentStreams.
+
+```python
+sources = ["doc1.pdf", "doc2.docx", "https://example.com/doc3.pdf"]
+for result in converter.convert_all(sources):
+    print(f"{result.input.file}: {result.status}")
+    if result.document:
+        print(result.document.export_to_markdown())
+```
+
+<ParamField path="source" type="Iterable[Union[Path, str, DocumentStream]]" required>
+  Source of input documents given as an iterable of file paths, URLs, or DocumentStreams.
+</ParamField>
+
+<ParamField path="headers" type="dict[str, str]" optional>
+  Optional headers given as a (single) dictionary of string key-value pairs, in case of URL input source.
+</ParamField>
+
+<ParamField path="raises_on_error" type="bool" default="True">
+  Whether to raise an error on the first conversion failure.
+</ParamField>
+
+<ParamField path="max_num_pages" type="int" default="sys.maxsize">
+  Maximum number of pages to convert.
+</ParamField>
+
+<ParamField path="max_file_size" type="int" default="sys.maxsize">
+  Maximum number of pages accepted per document. Documents exceeding this number will be skipped.
+</ParamField>
+
+<ParamField path="page_range" type="PageRange" optional>
+  Range of pages to convert in each document.
+</ParamField>
+
+<ResponseField name="yields" type="Iterator[ConversionResult]">
+  The conversion results, each containing a `DoclingDocument` in the `document` attribute and metadata about the conversion process.
+</ResponseField>
+
+**Raises:**
+- `ConversionError`: An error occurred during conversion.
+
+---
+
+### `convert_string()`
+
+Convert a document given as a string using the specified format.
+
+Only Markdown (`InputFormat.MD`) and HTML (`InputFormat.HTML`) formats are supported. The content is wrapped in a `DocumentStream` and passed to the main conversion pipeline.
+
+```python
+markdown_content = "# Hello\n\nThis is a test document."
+result = converter.convert_string(
+    content=markdown_content,
+    format=InputFormat.MD,
+    name="my-document"
+)
+```
+
+<ParamField path="content" type="str" required>
+  The document content as a string.
+</ParamField>
+
+<ParamField path="format" type="InputFormat" required>
+  The format of the input content. Must be either `InputFormat.MD` or `InputFormat.HTML`.
+</ParamField>
+
+<ParamField path="name" type="str" optional>
+  The filename to associate with the document. If not provided, a timestamp-based name is generated. The appropriate file extension (`md` or `html`) is appended if missing.
+</ParamField>
+
+<ResponseField name="return" type="ConversionResult">
+  The conversion result, which contains a `DoclingDocument` in the `document` attribute, and metadata about the conversion process.
+</ResponseField>
+
+**Raises:**
+- `ValueError`: If format is neither `InputFormat.MD` nor `InputFormat.HTML`.
+- `ConversionError`: An error occurred during conversion.
+
+---
+
+### `initialize_pipeline()`
+
+Initialize the conversion pipeline for the selected format.
+
+```python
+converter.initialize_pipeline(InputFormat.PDF)
+```
+
+<ParamField path="format" type="InputFormat" required>
+  The input format for which to initialize the pipeline.
+</ParamField>
+
+**Raises:**
+- `ConversionError`: If no pipeline could be initialized for the given format.
+- `RuntimeError`: If `artifacts_path` is set in `docling.datamodel.settings.settings` when required by the pipeline, but points to a non-directory file.
+- `FileNotFoundError`: If local model files are not found.
+
+## Complete Example
+
+```python
+from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+
+# Initialize converter with custom options
+converter = DocumentConverter(
+    allowed_formats=[InputFormat.PDF, InputFormat.DOCX, InputFormat.MD],
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_options=PdfPipelineOptions(
+                do_ocr=True,
+                do_table_structure=True
+            )
+        )
+    }
+)
+
+# Convert a single document
+result = converter.convert("document.pdf")
+if result.status == ConversionStatus.SUCCESS:
+    # Export to markdown
+    markdown = result.document.export_to_markdown()
+    print(markdown)
+    
+    # Export to JSON
+    json_output = result.document.export_to_dict()
+    
+# Batch conversion
+documents = ["doc1.pdf", "doc2.docx", "doc3.html"]
+for result in converter.convert_all(documents, raises_on_error=False):
+    print(f"Processing {result.input.file.name}...")
+    print(f"Status: {result.status}")
+    if result.errors:
+        for error in result.errors:
+            print(f"Error: {error.error_message}")
+```
+
+## See Also
+
+- [ConversionResult](/api/conversion-result) - Result object returned by conversion methods
+- [DoclingDocument](/api/docling-document) - The document object containing converted content

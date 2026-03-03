@@ -1,0 +1,275 @@
+---
+title: Installation
+description: Install Docling on macOS, Linux, or Windows with pip, uv, or conda
+---
+
+Docling is available as a Python package and works on macOS, Linux, and Windows. Both x86_64 and arm64 architectures are supported.
+
+## Requirements
+
+<Note>
+Python 3.9 support was dropped in Docling version 2.70.0. **Python 3.10 or higher is required.**
+</Note>
+
+Docling supports the following Python versions:
+
+- Python 3.10
+- Python 3.11
+- Python 3.12
+- Python 3.13
+- Python 3.14
+
+### System compatibility
+
+- **macOS** (x86_64 and Apple Silicon arm64)
+- **Linux** (x86_64 and arm64)
+- **Windows** (x86_64)
+
+## Basic installation
+
+### Using pip
+
+The simplest way to install Docling is via pip:
+
+```bash
+pip install docling
+```
+
+This installs the core package with all essential dependencies for document conversion.
+
+### Using uv
+
+[uv](https://github.com/astral-sh/uv) is a fast Python package installer. Install Docling with:
+
+```bash
+uv pip install docling
+```
+
+### Using conda
+
+If you use conda for package management:
+
+```bash
+conda install -c conda-forge docling
+```
+
+<Warning>
+Note: Conda package availability may lag behind PyPI releases. Check [conda-forge](https://anaconda.org/conda-forge/docling) for the latest available version.
+</Warning>
+
+## Optional dependencies
+
+Docling offers several optional feature sets that you can install based on your needs.
+
+### OCR engines
+
+For enhanced OCR capabilities, install one or more OCR backends:
+
+<Tabs>
+  <Tab title="EasyOCR">
+    EasyOCR supports 80+ languages with deep learning models:
+    ```bash
+    pip install docling[easyocr]
+    ```
+  </Tab>
+  <Tab title="Tesseract OCR">
+    TesseractOCR is a mature OCR engine with Python bindings:
+    ```bash
+    pip install docling[tesserocr]
+    ```
+    <Note>
+    Tesseract requires system-level installation. On macOS: `brew install tesseract`. On Ubuntu/Debian: `apt-get install tesseract-ocr libtesseract-dev`.
+    </Note>
+  </Tab>
+  <Tab title="macOS Vision">
+    Native macOS OCR using Apple's Vision framework (macOS only):
+    ```bash
+    pip install docling[ocrmac]
+    ```
+  </Tab>
+  <Tab title="RapidOCR">
+    Fast and lightweight OCR (included by default):
+    ```bash
+    pip install docling[rapidocr]
+    ```
+  </Tab>
+</Tabs>
+
+### Visual Language Models (VLM)
+
+Use Visual Language Models for enhanced document understanding:
+
+```bash
+pip install docling[vlm]
+```
+
+This enables models like [GraniteDocling](https://huggingface.co/ibm-granite/granite-docling-258M) with MLX acceleration on Apple Silicon.
+
+### Audio processing
+
+For audio and video file processing with Automatic Speech Recognition:
+
+```bash
+pip install docling[asr]
+```
+
+Includes Whisper models with MLX acceleration on Apple Silicon.
+
+### XBRL financial documents
+
+To process XBRL (eXtensible Business Reporting Language) documents:
+
+```bash
+pip install docling[xbrl]
+```
+
+### GPU acceleration
+
+For GPU-accelerated inference (Linux with CUDA):
+
+```bash
+pip install docling[onnxruntime]
+```
+
+This installs `onnxruntime-gpu` for faster model inference on NVIDIA GPUs.
+
+### Combined installation
+
+Install multiple optional features together:
+
+```bash
+pip install docling[easyocr,vlm,asr]
+```
+
+## Verify installation
+
+After installation, verify that Docling is working correctly:
+
+<Steps>
+  <Step title="Check the CLI">
+    Verify the command-line interface is available:
+    ```bash
+    docling --version
+    ```
+  </Step>
+  <Step title="Test Python import">
+    Open a Python interpreter and import Docling:
+    ```python
+    from docling.document_converter import DocumentConverter
+    print("Docling imported successfully!")
+    ```
+  </Step>
+  <Step title="Run a test conversion">
+    Convert a simple document to verify everything works:
+    ```python
+    from docling.document_converter import DocumentConverter
+    
+    converter = DocumentConverter()
+    result = converter.convert("https://arxiv.org/pdf/2408.09869")
+    print("Conversion successful!")
+    print(result.document.export_to_markdown()[:200])
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Installation issues
+
+<AccordionGroup>
+  <Accordion title="Python version error">
+    If you see errors about Python version:
+    ```bash
+    ERROR: Package 'docling' requires a different Python: 3.9.0 not in '>=3.10,<4.0'
+    ```
+    
+    Upgrade to Python 3.10 or higher. Check your version with:
+    ```bash
+    python --version
+    ```
+  </Accordion>
+  
+  <Accordion title="Dependency conflicts">
+    If you encounter dependency conflicts, try installing in a fresh virtual environment:
+    ```bash
+    python -m venv docling-env
+    source docling-env/bin/activate  # On Windows: docling-env\Scripts\activate
+    pip install docling
+    ```
+  </Accordion>
+  
+  <Accordion title="Missing system dependencies">
+    Some optional features require system libraries:
+    
+    **For Tesseract on Ubuntu/Debian:**
+    ```bash
+    sudo apt-get update
+    sudo apt-get install tesseract-ocr libtesseract-dev
+    ```
+    
+    **For Tesseract on macOS:**
+    ```bash
+    brew install tesseract
+    ```
+  </Accordion>
+  
+  <Accordion title="Apple Silicon compatibility">
+    On Apple Silicon Macs (M1, M2, M3), ensure you're using native arm64 Python:
+    ```bash
+    python -c "import platform; print(platform.machine())"
+    ```
+    Should output `arm64`. If it shows `x86_64`, you're running Rosetta Python.
+  </Accordion>
+</AccordionGroup>
+
+### Network issues
+
+Docling downloads AI models from Hugging Face on first use. If you're behind a firewall:
+
+1. **Set proxy environment variables:**
+   ```bash
+   export HTTP_PROXY=http://proxy.example.com:8080
+   export HTTPS_PROXY=http://proxy.example.com:8080
+   ```
+
+2. **Pre-download models** to a local cache and set `HF_HOME`:
+   ```bash
+   export HF_HOME=/path/to/local/cache
+   ```
+
+3. **Use air-gapped environments** by copying the cache directory to offline systems.
+
+## Development installation
+
+To contribute to Docling or use the latest development version:
+
+```bash
+git clone https://github.com/docling-project/docling.git
+cd docling
+pip install -e .
+```
+
+For development with all tools:
+
+```bash
+pip install -e ".[dev,docs,examples]"
+```
+
+See [CONTRIBUTING.md](https://github.com/docling-project/docling/blob/main/CONTRIBUTING.md) for detailed development setup.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Convert your first document with a complete example
+  </Card>
+  <Card title="Basic conversion" icon="file" href="/guides/basic-conversion">
+    Learn the fundamentals of document conversion
+  </Card>
+  <Card title="CLI usage" icon="terminal" href="/api/cli/commands">
+    Use Docling from the command line
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/guides/advanced-options">
+    Configure pipelines and customize behavior
+  </Card>
+</CardGroup>

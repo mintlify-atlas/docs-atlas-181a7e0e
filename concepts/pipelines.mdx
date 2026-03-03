@@ -1,0 +1,425 @@
+---
+title: Pipelines
+description: Understanding Docling's pipeline architecture for document processing
+---
+
+Pipelines in Docling orchestrate the document conversion process, applying backends, ML models, and transformations to produce structured `DoclingDocument` output.
+
+## Pipeline Architecture
+
+All pipelines inherit from `BasePipeline` (`docling/pipeline/base_pipeline.py:45`) and implement a common interface:
+
+```python
+class BasePipeline(ABC):
+    def execute(self, in_doc: InputDocument, raises_on_error: bool) -> ConversionResult:
+        # Build document structure
+        conv_res = self._build_document(conv_res)
+        # Assemble into DoclingDocument
+        conv_res = self._assemble_document(conv_res)
+        # Apply enrichment models
+        conv_res = self._enrich_document(conv_res)
+        return conv_res
+```
+
+The pipeline execution follows three main phases:
+
+<Steps>
+  <Step title="Build">
+    Extract content using format-specific backends and apply core processing models (OCR, layout analysis, etc.).
+  </Step>
+  
+  <Step title="Assemble">
+    Structure extracted content into a unified `DoclingDocument` with proper hierarchy and reading order.
+  </Step>
+  
+  <Step title="Enrich">
+    Apply optional ML models for enhancement (picture classification, chart extraction, etc.).
+  </Step>
+</Steps>
+
+## Pipeline Types
+
+Docling provides several pipeline implementations for different use cases:
+
+### SimplePipeline
+
+**Purpose**: Process formats with declarative backends that directly output `DoclingDocument`.
+
+**Supported formats**: DOCX, HTML, Markdown, CSV, Excel, PowerPoint, JATS XML, USPTO XML, XBRL, AsciiDoc, LaTeX
+
+**Implementation**: `docling/pipeline/simple_pipeline.py:16`
+
+The `SimplePipeline` delegates conversion entirely to the backend:
+
+```python
+def _build_document(self, conv_res: ConversionResult) -> ConversionResult:
+    # Backend directly produces DoclingDocument
+    conv_res.document = conv_res.input._backend.convert()
+    return conv_res
+```
+
+**Usage**:
+```python
+from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import InputFormat
+
+converter = DocumentConverter(allowed_formats=[InputFormat.DOCX])
+result = converter.convert("document.docx")  # Uses SimplePipeline
+```
+
+### StandardPdfPipeline
+
+**Purpose**: High-performance multi-threaded PDF processing with full feature support.
+
+**Supported formats**: PDF, images
+
+**Implementation**: `docling/pipeline/standard_pdf_pipeline.py:433`
+
+The `StandardPdfPipeline` executes multiple stages in parallel across pages:
+
+1. **Preprocess**: Load page backends, scale images
+2. **OCR**: Text recognition for scanned content
+3. **Layout**: Detect document structure (headings, paragraphs, tables)
+4. **Table Structure**: Parse table cells and relationships
+5. **Assemble**: Combine page elements
+
+**Key features**:
+- Thread-safe multi-stage processing with bounded queues
+- Per-page isolation (each execution uses independent threads)
+- Configurable batch sizes and concurrency
+- Timeout support with graceful degradation
+
+**Architecture**:
+```python
+class StandardPdfPipeline(ConvertPipeline):
+    def __init__(self, pipeline_options: ThreadedPdfPipelineOptions):
+        # Initialize heavy models once
+        self.preprocessing_model = PagePreprocessingModel(...)
+        self.ocr_model = get_ocr_factory().create_instance(...)
+        self.layout_model = get_layout_factory().create_instance(...)
+        self.table_model = get_table_structure_factory().create_instance(...)
+        self.assemble_model = PageAssembleModel(...)
+```
+
+**Usage**:
+```python
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import ThreadedPdfPipelineOptions
+
+# Customize PDF pipeline
+pipeline_options = ThreadedPdfPipelineOptions(
+    do_ocr=True,
+    do_table_structure=True,
+    ocr_batch_size=8,
+    layout_batch_size=4,
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_options=pipeline_options
+        )
+    }
+)
+
+result = converter.convert("document.pdf")
+```
+
+<Info>
+The `StandardPdfPipeline` is designed for production use with deterministic run identifiers, explicit backpressure, and clean shutdown semantics. See the source documentation for implementation details.
+</Info>
+
+### VlmPipeline
+
+**Purpose**: Vision-language model based document conversion.
+
+**Supported formats**: PDF, images, HTML, Markdown
+
+**Implementation**: `docling/pipeline/vlm_pipeline.py:61`
+
+The `VlmPipeline` uses vision-language models to understand document content:
+
+**Response formats**:
+- **DocTags**: Structured format with bounding boxes
+- **Markdown**: Plain markdown output
+- **HTML**: HTML representation
+- **DeepSeek OCR Markdown**: Extended markdown with position annotations
+
+**Models supported**:
+- API-based models (OpenAI, Anthropic, etc.)
+- HuggingFace Transformers
+- MLX (Apple Silicon)
+- vLLM
+
+**Usage**:
+```python
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    VlmPipelineOptions,
+    VlmConvertOptions,
+)
+from docling.pipeline.vlm_pipeline import VlmPipeline
+
+# Using preset configuration
+vlm_options = VlmConvertOptions.from_preset('smoldocling')
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_cls=VlmPipeline,
+            pipeline_options=VlmPipelineOptions(vlm_options=vlm_options)
+        )
+    }
+)
+
+result = converter.convert("document.pdf")
+```
+
+<Tip>
+The VlmPipeline supports a `force_backend_text` option that extracts text from the PDF backend using predicted bounding boxes, which can improve accuracy for DocTags output.
+</Tip>
+
+### AsrPipeline
+
+**Purpose**: Audio transcription and document conversion.
+
+**Supported formats**: Audio files (MP3, WAV, etc.), WebVTT
+
+**Implementation**: `docling/pipeline/asr_pipeline.py`
+
+Converts audio content to text using automatic speech recognition models.
+
+## Pipeline Options
+
+Each pipeline accepts configuration through `PipelineOptions` subclasses:
+
+### ConvertPipelineOptions
+
+Base options for conversion pipelines:
+
+```python
+from docling.datamodel.pipeline_options import ConvertPipelineOptions
+
+options = ConvertPipelineOptions(
+    do_picture_classification=True,
+    do_picture_description=False,
+    do_chart_extraction=False,
+    artifacts_path="./models",
+    enable_remote_services=False,
+)
+```
+
+**Common parameters**:
+- `artifacts_path`: Local path for model files
+- `enable_remote_services`: Allow remote API calls
+- `allow_external_plugins`: Enable plugin system
+- `do_picture_classification`: Classify images as charts, diagrams, etc.
+- `do_picture_description`: Generate image captions
+- `do_chart_extraction`: Extract data from charts
+- `accelerator_options`: GPU/hardware acceleration settings
+
+### ThreadedPdfPipelineOptions
+
+Options specific to `StandardPdfPipeline`:
+
+```python
+from docling.datamodel.pipeline_options import ThreadedPdfPipelineOptions
+
+options = ThreadedPdfPipelineOptions(
+    do_ocr=True,
+    do_table_structure=True,
+    do_code_enrichment=False,
+    do_formula_enrichment=False,
+    
+    # Batch configuration
+    ocr_batch_size=8,
+    layout_batch_size=4,
+    table_batch_size=4,
+    
+    # Threading
+    queue_max_size=32,
+    batch_polling_interval_seconds=0.1,
+    
+    # Timeouts
+    document_timeout=None,  # Seconds per document
+    
+    # Image generation
+    generate_page_images=False,
+    generate_picture_images=False,
+    images_scale=1.0,
+)
+```
+
+**Performance tuning**:
+- `ocr_batch_size`: Pages per OCR batch (higher = better GPU utilization)
+- `layout_batch_size`: Pages per layout analysis batch
+- `queue_max_size`: Bounded queue size between stages (backpressure control)
+- `batch_polling_interval_seconds`: How often to check queues for new items
+
+### VlmPipelineOptions
+
+Options for VLM-based pipelines:
+
+```python
+from docling.datamodel.pipeline_options import (
+    VlmPipelineOptions,
+    VlmConvertOptions,
+)
+
+vlm_options = VlmConvertOptions.from_preset('smoldocling')
+
+options = VlmPipelineOptions(
+    vlm_options=vlm_options,
+    force_backend_text=False,
+    images_scale=1.0,
+    generate_page_images=True,
+    generate_picture_images=False,
+)
+```
+
+## Enrichment Pipeline
+
+All `ConvertPipeline` instances support an enrichment phase that applies ML models to the assembled `DoclingDocument`:
+
+```python
+def _enrich_document(self, conv_res: ConversionResult) -> ConversionResult:
+    for model in self.enrichment_pipe:
+        for element_batch in chunkify(
+            _prepare_elements(conv_res, model),
+            model.elements_batch_size,
+        ):
+            for element in model(doc=conv_res.document, element_batch=element_batch):
+                pass  # Models modify document in-place
+    return conv_res
+```
+
+**Available enrichment models**:
+- `DocumentPictureClassifier`: Classify images by type
+- Picture description models: Generate captions
+- `ChartExtractionModelGraniteVision`: Extract data from charts
+- `CodeFormulaVlmModel`: Detect and parse code blocks and formulas
+
+## Custom Pipelines
+
+You can create custom pipelines by subclassing `BasePipeline`:
+
+```python
+from docling.pipeline.base_pipeline import BasePipeline
+from docling.datamodel.pipeline_options import PipelineOptions
+from docling.datamodel.document import ConversionResult
+from docling.datamodel.base_models import ConversionStatus
+
+class CustomPipeline(BasePipeline):
+    def _build_document(self, conv_res: ConversionResult) -> ConversionResult:
+        # Your custom processing logic
+        return conv_res
+    
+    def _determine_status(self, conv_res: ConversionResult) -> ConversionStatus:
+        return ConversionStatus.SUCCESS
+    
+    @classmethod
+    def get_default_options(cls) -> PipelineOptions:
+        return PipelineOptions()
+    
+    @classmethod
+    def is_backend_supported(cls, backend: AbstractDocumentBackend):
+        return True  # Or implement your logic
+```
+
+## Pipeline Lifecycle
+
+The complete execution flow for a pipeline:
+
+```python
+def execute(self, in_doc: InputDocument, raises_on_error: bool) -> ConversionResult:
+    conv_res = ConversionResult(input=in_doc)
+    
+    try:
+        # Build: Extract and process content
+        conv_res = self._build_document(conv_res)
+        
+        # Assemble: Create DoclingDocument
+        conv_res = self._assemble_document(conv_res)
+        
+        # Enrich: Apply ML models
+        conv_res = self._enrich_document(conv_res)
+        
+        # Determine final status
+        conv_res.status = self._determine_status(conv_res)
+        
+    except Exception as e:
+        # Handle errors
+        conv_res.status = ConversionStatus.FAILURE
+        if raises_on_error:
+            raise
+    finally:
+        # Cleanup resources
+        self._unload(conv_res)
+    
+    return conv_res
+```
+
+## Performance Considerations
+
+### Model Initialization
+
+Heavy models (OCR, layout, table structure) are initialized once per pipeline instance and reused:
+
+```python
+# DocumentConverter caches pipelines by (class, options_hash)
+# This ensures models are loaded only once
+converter = DocumentConverter()
+
+# All PDFs share the same pipeline instance
+for pdf_path in pdf_files:
+    result = converter.convert(pdf_path)
+```
+
+### Batch Processing
+
+For `StandardPdfPipeline`, optimal performance comes from:
+
+1. **Page batching**: Process multiple pages together for GPU efficiency
+2. **Stage parallelism**: Different pages at different stages simultaneously
+3. **Queue backpressure**: Prevent memory overflow with bounded queues
+
+### Timeout Handling
+
+Set document timeouts to prevent hanging on problematic files:
+
+```python
+options = ThreadedPdfPipelineOptions(document_timeout=300.0)  # 5 minutes
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=options)
+    }
+)
+
+# Partial results returned if timeout exceeded
+result = converter.convert("large_document.pdf")
+if result.status == ConversionStatus.PARTIAL_SUCCESS:
+    print(f"Converted {len(result.pages)} pages before timeout")
+```
+
+## Related Topics
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Understand how pipelines fit in Docling's architecture
+  </Card>
+  
+  <Card title="Backends" icon="server" href="/concepts/backends">
+    Learn about format-specific document backends
+  </Card>
+  
+  <Card title="DoclingDocument" icon="file-code" href="/concepts/docling-document">
+    Explore the document representation pipelines produce
+  </Card>
+  
+  <Card title="Usage Guide" icon="book" href="/guides/basic-conversion">
+    See pipeline configuration examples
+  </Card>
+</CardGroup>

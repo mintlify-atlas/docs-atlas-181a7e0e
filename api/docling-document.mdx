@@ -1,0 +1,349 @@
+---
+title: 'DoclingDocument'
+description: 'Core document object containing structured content from converted documents'
+---
+
+## Overview
+
+`DoclingDocument` is the core data structure in Docling that represents a converted document. It provides a rich, structured representation of the document content with support for various document elements (text, tables, figures, etc.) and multiple export formats.
+
+This class is part of the `docling-core` library and is exposed through Docling's API.
+
+## Class Definition
+
+```python
+from docling.datamodel.document import DoclingDocument
+```
+
+## Key Concepts
+
+### Document Items
+
+A `DoclingDocument` is composed of items, where each item represents a structural element of the document:
+
+- **TextItem** - Paragraphs, headings, captions
+- **TableItem** - Tables with structure and content
+- **PictureItem** - Images and figures
+- **SectionHeaderItem** - Section headings with hierarchy
+- **ListItem** - List items (ordered/unordered)
+- **DocItem** - Generic document items
+
+### Item Labels
+
+Each item has a label from `DocItemLabel` enum:
+
+- `TITLE` - Document title
+- `SECTION_HEADER` - Section heading
+- `PARAGRAPH` - Regular paragraph
+- `TEXT` - Plain text
+- `LIST_ITEM` - List item
+- `TABLE` - Table
+- `PICTURE` - Image or figure
+- `CAPTION` - Caption for figures/tables
+- `FORMULA` - Mathematical formula
+- `CODE` - Code block
+- `PAGE_HEADER` / `PAGE_FOOTER` - Headers and footers
+- `FOOTNOTE` - Footnote
+- And more...
+
+## Basic Attributes
+
+<ResponseField name="name" type="str">
+  The document name or identifier.
+</ResponseField>
+
+<ResponseField name="texts" type="list">
+  List of text items in the document.
+</ResponseField>
+
+<ResponseField name="tables" type="list">
+  List of table items in the document.
+</ResponseField>
+
+<ResponseField name="pictures" type="list">
+  List of picture items in the document.
+</ResponseField>
+
+## Core Methods
+
+### `iterate_items()`
+
+Iterate over all items in the document in order.
+
+```python
+for item in doc.iterate_items():
+    print(f"{item.label}: {item.get_text()}")
+```
+
+<ResponseField name="yields" type="DocItem">
+  Document items in document order.
+</ResponseField>
+
+---
+
+### `export_to_markdown()`
+
+Export the document to Markdown format.
+
+```python
+markdown_content = doc.export_to_markdown()
+with open("output.md", "w") as f:
+    f.write(markdown_content)
+```
+
+<ResponseField name="return" type="str">
+  The document content in Markdown format.
+</ResponseField>
+
+---
+
+### `export_to_html()`
+
+Export the document to HTML format.
+
+```python
+html_content = doc.export_to_html()
+with open("output.html", "w") as f:
+    f.write(html_content)
+```
+
+<ResponseField name="return" type="str">
+  The document content in HTML format.
+</ResponseField>
+
+---
+
+### `export_to_dict()`
+
+Export the document to a dictionary representation.
+
+```python
+json_dict = doc.export_to_dict()
+import json
+with open("output.json", "w") as f:
+    json.dump(json_dict, f, indent=2)
+```
+
+<ResponseField name="return" type="dict">
+  The document structure as a dictionary, suitable for JSON serialization.
+</ResponseField>
+
+---
+
+### `save_as_markdown()`
+
+Save the document directly to a Markdown file.
+
+```python
+doc.save_as_markdown("output.md")
+```
+
+<ParamField path="filename" type="Union[str, Path]" required>
+  Path where the Markdown file will be saved.
+</ParamField>
+
+---
+
+### `save_as_html()`
+
+Save the document directly to an HTML file.
+
+```python
+doc.save_as_html("output.html")
+```
+
+<ParamField path="filename" type="Union[str, Path]" required>
+  Path where the HTML file will be saved.
+</ParamField>
+
+## Usage Examples
+
+### Basic Document Access
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+doc = result.document
+
+print(f"Document name: {doc.name}")
+print(f"Number of texts: {len(doc.texts)}")
+print(f"Number of tables: {len(doc.tables)}")
+print(f"Number of pictures: {len(doc.pictures)}")
+```
+
+### Iterating Through Items
+
+```python
+from docling.datamodel.document import DocItemLabel
+
+doc = result.document
+
+# Iterate all items
+for item in doc.iterate_items():
+    if item.label == DocItemLabel.SECTION_HEADER:
+        print(f"\n## {item.get_text()}")
+    elif item.label == DocItemLabel.PARAGRAPH:
+        print(item.get_text())
+    elif item.label == DocItemLabel.TABLE:
+        print("[Table found]")
+```
+
+### Filtering by Item Type
+
+```python
+# Get all section headers
+headers = [
+    item for item in doc.iterate_items()
+    if item.label == DocItemLabel.SECTION_HEADER
+]
+
+for header in headers:
+    print(f"Section: {header.get_text()}")
+
+# Get all tables
+tables = [
+    item for item in doc.iterate_items()
+    if item.label == DocItemLabel.TABLE
+]
+
+print(f"Found {len(tables)} tables")
+```
+
+### Exporting to Different Formats
+
+```python
+from pathlib import Path
+
+doc = result.document
+output_dir = Path("output")
+output_dir.mkdir(exist_ok=True)
+
+# Export to Markdown
+markdown = doc.export_to_markdown()
+(output_dir / "document.md").write_text(markdown)
+
+# Export to HTML
+html = doc.export_to_html()
+(output_dir / "document.html").write_text(html)
+
+# Export to JSON
+import json
+json_dict = doc.export_to_dict()
+(output_dir / "document.json").write_text(
+    json.dumps(json_dict, indent=2)
+)
+```
+
+### Working with Tables
+
+```python
+from docling.datamodel.document import TableItem
+
+doc = result.document
+
+# Access tables directly
+for i, table in enumerate(doc.tables, 1):
+    print(f"\nTable {i}:")
+    # Tables have structured data
+    if hasattr(table, 'data'):
+        print(f"Rows: {len(table.data)}")
+        
+# Or iterate to find tables
+for item in doc.iterate_items():
+    if isinstance(item, TableItem):
+        print(f"Found table: {item.caption or 'No caption'}")
+```
+
+### Working with Text Content
+
+```python
+from docling.datamodel.document import TextItem, SectionHeaderItem
+
+doc = result.document
+
+# Build a table of contents
+toc = []
+for item in doc.iterate_items():
+    if isinstance(item, SectionHeaderItem):
+        toc.append(item.get_text())
+
+print("Table of Contents:")
+for i, heading in enumerate(toc, 1):
+    print(f"{i}. {heading}")
+```
+
+### Extracting Plain Text
+
+```python
+# Get all text content
+all_text = []
+for item in doc.iterate_items():
+    text = item.get_text()
+    if text:
+        all_text.append(text)
+
+full_text = "\n\n".join(all_text)
+print(full_text)
+```
+
+### Searching Document Content
+
+```python
+import re
+
+def search_document(doc, pattern):
+    """Search for a pattern in the document."""
+    results = []
+    for item in doc.iterate_items():
+        text = item.get_text()
+        if text and re.search(pattern, text, re.IGNORECASE):
+            results.append({
+                'label': item.label,
+                'text': text,
+                'item': item
+            })
+    return results
+
+# Search for a term
+results = search_document(doc, r'artificial intelligence')
+for result in results:
+    print(f"{result['label']}: {result['text'][:100]}...")
+```
+
+### Document Statistics
+
+```python
+from collections import Counter
+
+def get_document_stats(doc):
+    """Get statistics about document structure."""
+    label_counts = Counter()
+    total_text_length = 0
+    
+    for item in doc.iterate_items():
+        label_counts[item.label] += 1
+        text = item.get_text()
+        if text:
+            total_text_length += len(text)
+    
+    return {
+        'label_counts': dict(label_counts),
+        'total_items': sum(label_counts.values()),
+        'total_text_length': total_text_length
+    }
+
+stats = get_document_stats(doc)
+print(f"Total items: {stats['total_items']}")
+print(f"Total text length: {stats['total_text_length']} characters")
+print("\nItem type distribution:")
+for label, count in stats['label_counts'].items():
+    print(f"  {label}: {count}")
+```
+
+## See Also
+
+- [DocumentConverter](/api/document-converter) - Main class for document conversion
+- [ConversionResult](/api/conversion-result) - Container for conversion results
+- [docling-core documentation](https://github.com/DS4SD/docling-core) - Detailed documentation for DoclingDocument

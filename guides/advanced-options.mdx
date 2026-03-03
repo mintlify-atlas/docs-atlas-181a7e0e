@@ -1,0 +1,441 @@
+---
+title: Advanced Conversion Options
+description: Customize document conversion with pipeline options, format-specific backends, and processing features
+---
+
+## Overview
+
+Docling provides extensive customization options through:
+
+- **Pipeline Options**: Control processing behavior (OCR, table structure, timeouts)
+- **Format Options**: Specify which formats to allow and how to process them
+- **Backend Options**: Choose different parsing backends for specific formats
+
+This guide covers configuration patterns that apply across document types. For PDF-specific options, see the [PDF Processing](/guides/pdf-processing) guide.
+
+## Format Restrictions
+
+Control which document formats the converter accepts:
+
+```python
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter(
+    allowed_formats=[
+        InputFormat.PDF,
+        InputFormat.DOCX,
+        InputFormat.PPTX,
+        InputFormat.HTML,
+        InputFormat.MD,
+        InputFormat.IMAGE,
+    ]
+)
+
+# Files not in allowed_formats will be skipped
+results = converter.convert_all([
+    "document.pdf",   # Converted
+    "data.xlsx",      # Skipped (not in allowed_formats)
+    "report.docx",    # Converted
+])
+```
+
+<Note>
+By default, all supported formats are allowed. Use `allowed_formats` to create a whitelist when you want to process only specific types.
+</Note>
+
+## Format-Specific Configuration
+
+Customize processing behavior for each format:
+
+```python
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import (
+    DocumentConverter,
+    PdfFormatOption,
+    WordFormatOption,
+)
+from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
+from docling.pipeline.simple_pipeline import SimplePipeline
+
+# Configure PDF processing
+pdf_options = PdfPipelineOptions()
+pdf_options.do_ocr = True
+pdf_options.do_table_structure = True
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_cls=StandardPdfPipeline,
+            backend=PyPdfiumDocumentBackend,
+            pipeline_options=pdf_options,
+        ),
+        InputFormat.DOCX: WordFormatOption(
+            pipeline_cls=SimplePipeline,
+        ),
+    }
+)
+```
+
+## Pipeline Timeouts
+
+Prevent long-running conversions from blocking your system:
+
+```python
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions(
+    document_timeout=120.0  # Timeout after 120 seconds
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+# Documents exceeding timeout return PARTIAL_SUCCESS status
+result = converter.convert("large_document.pdf")
+if result.status == ConversionStatus.PARTIAL_SUCCESS:
+    print("Conversion timed out, returning partial results")
+```
+
+<Warning>
+For production systems processing large document volumes, always set a reasonable `document_timeout` (90-120 seconds recommended) to prevent runaway conversions.
+</Warning>
+
+## Model Artifacts Path
+
+By default, models are downloaded automatically on first use. For offline environments or faster initialization:
+
+<Steps>
+
+<Step title="Download Models">
+Pre-fetch models to a local directory:
+
+```bash
+docling-tools models download
+# Models downloaded to $HOME/.cache/docling/models
+```
+
+Or specify a custom path:
+
+```bash
+docling-tools models download --output /path/to/models
+```
+</Step>
+
+<Step title="Configure Artifacts Path">
+Point Docling to your local model cache:
+
+```python
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions(
+    artifacts_path="/path/to/models"
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+```
+
+Or use an environment variable:
+
+```bash
+export DOCLING_ARTIFACTS_PATH="/path/to/models"
+python your_script.py
+```
+</Step>
+
+</Steps>
+
+## Hardware Acceleration
+
+Control GPU/accelerator usage for model inference:
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    AcceleratorOptions,
+    AcceleratorDevice,
+)
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions(
+    accelerator_options=AcceleratorOptions(
+        num_threads=4,             # CPU threads for non-GPU operations
+        device=AcceleratorDevice.CUDA,  # Use CUDA GPU
+    )
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+```
+
+### Available Devices
+
+<Tabs>
+  <Tab title="CUDA (NVIDIA)">
+    ```python
+    from docling.datamodel.pipeline_options import (
+        AcceleratorOptions,
+        AcceleratorDevice,
+    )
+
+    accelerator_options = AcceleratorOptions(
+        device=AcceleratorDevice.CUDA,
+        device_id=0,  # GPU index
+    )
+    ```
+  </Tab>
+  <Tab title="MPS (Apple Silicon)">
+    ```python
+    from docling.datamodel.pipeline_options import (
+        AcceleratorOptions,
+        AcceleratorDevice,
+    )
+
+    accelerator_options = AcceleratorOptions(
+        device=AcceleratorDevice.MPS,
+    )
+    ```
+  </Tab>
+  <Tab title="CPU">
+    ```python
+    from docling.datamodel.pipeline_options import (
+        AcceleratorOptions,
+        AcceleratorDevice,
+    )
+
+    accelerator_options = AcceleratorOptions(
+        device=AcceleratorDevice.CPU,
+        num_threads=8,
+    )
+    ```
+  </Tab>
+  <Tab title="Auto-detect">
+    ```python
+    from docling.datamodel.pipeline_options import AcceleratorOptions
+
+    # Automatically selects the best available device
+    accelerator_options = AcceleratorOptions()
+    ```
+  </Tab>
+</Tabs>
+
+## Image Generation
+
+Generate page images and extract embedded pictures:
+
+```python
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions(
+    generate_page_images=True,     # Render each page as PNG
+    generate_picture_images=True,  # Extract embedded images
+    images_scale=2.0,              # Scale factor (1.0 = 72 DPI, 2.0 = 144 DPI)
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+result = converter.convert("document.pdf")
+
+# Access page images
+for page in result.document.pages:
+    if page.image:
+        page.image.save(f"page_{page.page_no}.png")
+
+# Access extracted pictures
+from docling_core.types.doc import PictureItem
+
+for item, level in result.document.iterate_items():
+    if isinstance(item, PictureItem):
+        if item.image:
+            item.image.save(f"picture_{item.self_ref}.png")
+```
+
+<Note>
+Enabling image generation increases processing time and memory usage. Enable only when needed for your use case.
+</Note>
+
+## Remote Services
+
+Some features (like API-based picture description) require connecting to external services. This must be explicitly enabled:
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    PictureDescriptionApiOptions,
+)
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions(
+    enable_remote_services=True,  # Required for API calls
+    do_picture_description=True,
+    picture_description_options=PictureDescriptionApiOptions(
+        url="http://localhost:8000/v1/chat/completions",
+        params={"model": "llava-1.5-7b"},
+        timeout=30.0,
+    ),
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+```
+
+<Warning>
+Remote services may send your document data to external servers. Only enable `enable_remote_services=True` when you understand the privacy implications.
+</Warning>
+
+## Backend Options
+
+Some formats support backend-specific configuration:
+
+<Tabs>
+  <Tab title="HTML">
+    ```python
+    from docling.datamodel.backend_options import HTMLBackendOptions
+    from docling.datamodel.base_models import InputFormat
+    from docling.document_converter import DocumentConverter, HTMLFormatOption
+
+    backend_options = HTMLBackendOptions(
+        fetch_images=True,           # Download remote images
+        source_uri="https://example.com/page.html",  # Resolve relative URLs
+        add_title=True,              # Include HTML title as furniture
+        infer_furniture=True,        # Detect content before first header
+    )
+
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.HTML: HTMLFormatOption(
+                backend_options=backend_options
+            )
+        }
+    )
+    ```
+  </Tab>
+  <Tab title="Markdown">
+    ```python
+    from docling.datamodel.backend_options import MarkdownBackendOptions
+    from docling.datamodel.base_models import InputFormat
+    from docling.document_converter import DocumentConverter, MarkdownFormatOption
+
+    backend_options = MarkdownBackendOptions(
+        fetch_images=True,           # Download remote images
+        source_uri="https://example.com/",  # Resolve relative image paths
+    )
+
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.MD: MarkdownFormatOption(
+                backend_options=backend_options
+            )
+        }
+    )
+    ```
+  </Tab>
+  <Tab title="PDF">
+    ```python
+    from docling.datamodel.backend_options import PdfBackendOptions
+    from docling.datamodel.base_models import InputFormat
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+    from pydantic import SecretStr
+
+    backend_options = PdfBackendOptions(
+        password=SecretStr("secret123")  # Password for encrypted PDFs
+    )
+
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(
+                backend_options=backend_options
+            )
+        }
+    )
+    ```
+  </Tab>
+  <Tab title="Excel">
+    ```python
+    from docling.datamodel.backend_options import MsExcelBackendOptions
+    from docling.datamodel.base_models import InputFormat
+    from docling.document_converter import DocumentConverter, ExcelFormatOption
+
+    backend_options = MsExcelBackendOptions(
+        treat_singleton_as_text=True,  # Convert 1x1 tables to text
+        gap_tolerance=1,               # Merge nearby data clusters
+    )
+
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.XLSX: ExcelFormatOption(
+                backend_options=backend_options
+            )
+        }
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Debugging Options
+
+Enable debug visualizations during development:
+
+```python
+from docling.datamodel.settings import settings
+
+# Enable debug visualizations
+settings.debug.visualize_layout = True
+settings.debug.visualize_ocr = True
+settings.debug.visualize_tables = True
+settings.debug.visualize_cells = True
+
+# Now run conversion
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+```
+
+<Warning>
+Debug visualizations are for development only. They significantly slow down processing and create many output files.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="PDF Processing" icon="file-pdf" href="/guides/pdf-processing">
+    Deep dive into PDF-specific options: table extraction, OCR, layout models
+  </Card>
+  <Card title="OCR Configuration" icon="text" href="/guides/ocr-configuration">
+    Configure OCR engines and language detection
+  </Card>
+  <Card title="VLM Models" icon="brain" href="/guides/vlm-models">
+    Use vision-language models for advanced document understanding
+  </Card>
+  <Card title="Batch Processing" icon="layer-group" href="/guides/batch-processing">
+    Optimize performance for large-scale document processing
+  </Card>
+</CardGroup>

@@ -1,0 +1,193 @@
+---
+title: ASR Pipeline
+description: Transcribe audio files to text using Automatic Speech Recognition
+---
+
+Convert audio files to text using Docling's ASR (Automatic Speech Recognition) pipeline with Whisper models.
+
+## Overview
+
+This example demonstrates:
+- Transcribing audio files to Markdown
+- Automatic model selection for your hardware
+- Using different Whisper model sizes
+- Getting timestamped transcriptions
+
+## Basic Audio Transcription
+
+```python minimal_asr_pipeline.py
+from pathlib import Path
+from docling.datamodel import asr_model_specs
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import AsrPipelineOptions
+from docling.document_converter import AudioFormatOption, DocumentConverter
+from docling.pipeline.asr_pipeline import AsrPipeline
+
+# Configure ASR pipeline with automatic model selection
+pipeline_options = AsrPipelineOptions()
+pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.AUDIO: AudioFormatOption(
+            pipeline_cls=AsrPipeline,
+            pipeline_options=pipeline_options,
+        )
+    }
+)
+
+# Transcribe audio file
+audio_path = Path("tests/data/audio/sample_10s.mp3")
+result = converter.convert(audio_path)
+
+# Print transcription with timestamps
+print(result.document.export_to_markdown())
+```
+
+## Automatic Hardware Selection
+
+The ASR pipeline automatically selects the best Whisper implementation:
+
+<Steps>
+  <Step title="Apple Silicon Detection">
+    On M1/M2/M3 Macs with `mlx-whisper` installed, uses MLX Whisper for optimal performance.
+  </Step>
+  
+  <Step title="Fallback to Native Whisper">
+    Otherwise, uses the native Whisper implementation (works on CPU/CUDA).
+  </Step>
+</Steps>
+
+```python
+from docling.datamodel import asr_model_specs
+
+# Automatically selects best implementation:
+# - MLX Whisper Turbo for Apple Silicon
+# - Native Whisper Turbo as fallback
+pipeline_options = AsrPipelineOptions()
+pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO
+```
+
+## Available Models
+
+<CodeGroup>
+
+```python Whisper Turbo (Default)
+from docling.datamodel import asr_model_specs
+
+pipeline_options = AsrPipelineOptions()
+pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO
+```
+
+```python Other Whisper Models
+from docling.datamodel import asr_model_specs
+
+# Available model specs:
+# - WHISPER_TURBO (recommended)
+# - Additional models may be available
+
+pipeline_options = AsrPipelineOptions()
+pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO
+```
+
+</CodeGroup>
+
+## Output Format
+
+Transcriptions include timestamps in the Markdown output:
+
+```markdown
+[time: 0.0-4.0]  Shakespeare on Scenery by Oscar Wilde
+
+[time: 5.28-9.96]  This is a LibriVox recording. All LibriVox recordings are in the public domain.
+```
+
+## Complete Example
+
+```python
+from pathlib import Path
+from docling_core.types.doc import DoclingDocument
+from docling.datamodel import asr_model_specs
+from docling.datamodel.base_models import ConversionStatus, InputFormat
+from docling.datamodel.document import ConversionResult
+from docling.datamodel.pipeline_options import AsrPipelineOptions
+from docling.document_converter import AudioFormatOption, DocumentConverter
+from docling.pipeline.asr_pipeline import AsrPipeline
+
+def get_asr_converter():
+    """Create a DocumentConverter configured for ASR.
+    
+    Uses WHISPER_TURBO which automatically selects:
+    - MLX Whisper Turbo for Apple Silicon (M1/M2/M3)
+    - Native Whisper Turbo as fallback
+    """
+    pipeline_options = AsrPipelineOptions()
+    pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO
+    
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.AUDIO: AudioFormatOption(
+                pipeline_cls=AsrPipeline,
+                pipeline_options=pipeline_options,
+            )
+        }
+    )
+    return converter
+
+def transcribe_audio(audio_path: Path) -> DoclingDocument:
+    """Transcribe audio file and return DoclingDocument."""
+    assert audio_path.exists(), f"Audio file not found: {audio_path}"
+    
+    converter = get_asr_converter()
+    result: ConversionResult = converter.convert(audio_path)
+    
+    assert result.status == ConversionStatus.SUCCESS, (
+        f"Conversion failed with status: {result.status}"
+    )
+    return result.document
+
+if __name__ == "__main__":
+    audio_path = Path("tests/data/audio/sample_10s.mp3")
+    doc = transcribe_audio(audio_path)
+    print(doc.export_to_markdown())
+```
+
+## Supported Audio Formats
+
+Docling ASR supports common audio formats:
+- **MP3**
+- **WAV**
+- **M4A**
+- **FLAC**
+- Other formats supported by ffmpeg
+
+<Note>
+  Some audio formats require ffmpeg to be installed and available on your system PATH.
+</Note>
+
+## Requirements
+
+- Python 3.9+
+- `docling` with ASR extras: `pip install docling[asr]`
+- For Apple Silicon optimization: `pip install mlx-whisper`
+- For some formats: `ffmpeg` installed on system
+
+## Installation
+
+```bash
+# Basic ASR support
+pip install docling[asr]
+
+# Apple Silicon optimization
+pip install mlx-whisper
+
+# Install ffmpeg (if needed)
+# macOS:
+brew install ffmpeg
+
+# Ubuntu/Debian:
+sudo apt-get install ffmpeg
+
+# Windows:
+# Download from https://ffmpeg.org/
+```

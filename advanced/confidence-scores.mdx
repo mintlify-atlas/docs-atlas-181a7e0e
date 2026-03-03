@@ -1,0 +1,521 @@
+---
+title: Confidence Scores
+description: Understand and use confidence grades to assess document conversion quality
+---
+
+## Overview
+
+Confidence scores provide quantitative assessment of document conversion quality, helping you:
+
+- Identify documents requiring manual review
+- Adjust conversion pipelines based on quality metrics
+- Set confidence thresholds for automated workflows
+- Catch potential conversion issues early
+
+Confidence grades were introduced in [v2.34.0](https://github.com/docling-project/docling/releases/tag/v2.34.0) and are available in the `confidence` field of `ConversionResult`.
+
+**Source**: ~/workspace/source/docs/concepts/confidence_scores.md:1
+
+## Quick Start
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+# Check overall quality
+print(f"Mean Grade: {result.confidence.mean_grade}")
+print(f"Low Grade: {result.confidence.low_grade}")
+
+# Check component scores
+print(f"Layout: {result.confidence.layout_grade}")
+print(f"OCR: {result.confidence.ocr_grade}")
+
+# Review page-level confidence
+for page_conf in result.confidence.pages:
+    print(f"Page {page_conf.page_no}: {page_conf.mean_grade}")
+```
+
+## Purpose and Use Cases
+
+**Source**: ~/workspace/source/docs/concepts/confidence_scores.md:6
+
+Complex layouts, poor scan quality, or challenging formatting can lead to suboptimal conversion results. Confidence scores help you:
+
+<CardGroup cols={2}>
+  <Card title="Quality Assurance" icon="clipboard-check">
+    Identify documents that may need manual review after conversion
+  </Card>
+  <Card title="Pipeline Optimization" icon="route">
+    Adjust conversion pipelines to the most appropriate for each document type
+  </Card>
+  <Card title="Threshold Setting" icon="gauge">
+    Set confidence thresholds for unattended batch conversions
+  </Card>
+  <Card title="Early Detection" icon="triangle-exclamation">
+    Catch potential conversion issues early in your workflow
+  </Card>
+</CardGroup>
+
+## Scores and Grades
+
+### Numerical Scores
+
+**Source**: ~/workspace/source/docs/concepts/confidence_scores.md:24
+
+Scores are numerical values between **0.0** and **1.0**, where higher values indicate better conversion quality.
+
+<Note>
+Scores are primarily for internal use. Their computation and weighting may change in future releases. **Use grades for decision-making.**
+</Note>
+
+### Quality Grades
+
+**Source**: ~/workspace/source/docs/concepts/confidence_scores.md:24
+
+Grades are categorical quality assessments based on score thresholds:
+
+| Grade | Meaning | Recommended Action |
+|-------|---------|--------------------|
+| `EXCELLENT` | Very high quality conversion | Use as-is |
+| `GOOD` | Reliable conversion quality | Safe for most use cases |
+| `FAIR` | Acceptable but may have issues | Review if accuracy is critical |
+| `POOR` | Low quality conversion | Manual review recommended |
+
+```python
+from docling_core.types.doc import ConfidenceGrade
+
+if result.confidence.mean_grade == ConfidenceGrade.POOR:
+    print("⚠️ This document may need manual review")
+elif result.confidence.mean_grade >= ConfidenceGrade.GOOD:
+    print("✅ High quality conversion")
+```
+
+<Tip>
+**Focus on quality grades!** Users should rely on document-level grade fields (`mean_grade` and `low_grade`) to assess overall conversion quality.
+</Tip>
+
+## Component Confidence Scores
+
+**Source**: ~/workspace/source/docs/concepts/confidence_scores.md:36
+
+Each confidence report includes four component scores and grades:
+
+### Layout Score
+
+**Overall quality of document element recognition**
+
+- Measures how well document structure was detected
+- Includes paragraphs, headings, lists, tables, figures
+- Based on model prediction confidence
+
+```python
+print(f"Layout Quality: {result.confidence.layout_grade}")
+print(f"Layout Score: {result.confidence.layout_score:.2f}")
+```
+
+### OCR Score
+
+**Quality of OCR-extracted content**
+
+- Evaluates text recognition quality from scanned pages
+- Only relevant for documents requiring OCR
+- Higher scores indicate more confident character recognition
+
+```python
+print(f"OCR Quality: {result.confidence.ocr_grade}")
+print(f"OCR Score: {result.confidence.ocr_score:.2f}")
+```
+
+### Parse Score
+
+**10th percentile score of digital text cells**
+
+- Emphasizes problem areas in text extraction
+- Based on text cell-level confidence
+- Highlights worst-performing regions
+
+```python
+print(f"Parse Quality: {result.confidence.parse_grade}")
+print(f"Parse Score: {result.confidence.parse_score:.2f}")
+```
+
+### Table Score
+
+**Table extraction quality**
+
+<Warning>
+Table confidence scoring is **not yet implemented**. This field is reserved for future use.
+</Warning>
+
+```python
+print(f"Table Quality: {result.confidence.table_grade}")
+print(f"Table Score: {result.confidence.table_score:.2f}")
+```
+
+## Summary Grades
+
+**Source**: ~/workspace/source/docs/concepts/confidence_scores.md:44
+
+Two aggregate grades provide overall document quality assessment:
+
+### Mean Grade
+
+**Average of the four component scores**
+
+- Provides overall quality assessment
+- Balances all aspects of conversion
+- **Recommended for most use cases**
+
+```python
+if result.confidence.mean_grade >= ConfidenceGrade.GOOD:
+    # High confidence - proceed with automated processing
+    process_automatically(result.document)
+else:
+    # Lower confidence - queue for review
+    queue_for_review(result.document)
+```
+
+### Low Grade
+
+**5th percentile score (highlights worst-performing areas)**
+
+- Emphasizes problematic regions
+- More conservative quality metric
+- Useful for critical applications
+
+```python
+if result.confidence.low_grade == ConfidenceGrade.POOR:
+    # Worst areas are poor quality
+    print("Document has significant quality issues")
+```
+
+## Page-Level vs Document-Level
+
+**Source**: ~/workspace/source/docs/concepts/confidence_scores.md:52
+
+Confidence grades are calculated at two levels:
+
+### Document-Level Confidence
+
+Overall scores and grades for the entire document:
+
+```python
+# Access document-level confidence
+doc_confidence = result.confidence
+
+print(f"Document Quality: {doc_confidence.mean_grade}")
+print(f"Layout: {doc_confidence.layout_score:.2f}")
+print(f"OCR: {doc_confidence.ocr_score:.2f}")
+print(f"Parse: {doc_confidence.parse_score:.2f}")
+```
+
+Document-level scores are calculated as **averages of page-level scores**.
+
+### Page-Level Confidence
+
+Individual scores and grades for each page:
+
+```python
+# Access page-level confidence
+for page_conf in result.confidence.pages:
+    print(f"\nPage {page_conf.page_no}:")
+    print(f"  Mean Grade: {page_conf.mean_grade}")
+    print(f"  Low Grade: {page_conf.low_grade}")
+    print(f"  Layout: {page_conf.layout_grade}")
+    print(f"  OCR: {page_conf.ocr_grade}")
+    print(f"  Parse: {page_conf.parse_grade}")
+```
+
+### Identifying Problematic Pages
+
+```python
+# Find pages with quality issues
+problematic_pages = [
+    page_conf.page_no
+    for page_conf in result.confidence.pages
+    if page_conf.mean_grade == ConfidenceGrade.POOR
+]
+
+if problematic_pages:
+    print(f"Pages needing review: {problematic_pages}")
+```
+
+## Practical Examples
+
+### Quality-Based Workflow Routing
+
+```python
+from docling.document_converter import DocumentConverter
+from docling_core.types.doc import ConfidenceGrade
+
+def process_document_with_routing(file_path):
+    converter = DocumentConverter()
+    result = converter.convert(file_path)
+    
+    mean_grade = result.confidence.mean_grade
+    
+    if mean_grade == ConfidenceGrade.EXCELLENT:
+        # High quality - automated processing
+        return "auto_process", result.document
+    
+    elif mean_grade == ConfidenceGrade.GOOD:
+        # Good quality - spot check recommended
+        return "spot_check", result.document
+    
+    elif mean_grade == ConfidenceGrade.FAIR:
+        # Fair quality - human review recommended
+        return "human_review", result.document
+    
+    else:  # POOR
+        # Poor quality - full manual processing
+        return "manual_process", result.document
+
+# Use in workflow
+routing, document = process_document_with_routing("document.pdf")
+print(f"Route to: {routing}")
+```
+
+### Batch Processing with Thresholds
+
+```python
+from pathlib import Path
+from docling.document_converter import DocumentConverter
+from docling_core.types.doc import ConfidenceGrade
+
+def batch_convert_with_quality_check(input_dir, min_grade=ConfidenceGrade.GOOD):
+    converter = DocumentConverter()
+    
+    results = {
+        "processed": [],
+        "review_needed": [],
+        "failed": []
+    }
+    
+    for pdf_file in Path(input_dir).glob("*.pdf"):
+        try:
+            result = converter.convert(str(pdf_file))
+            
+            if result.confidence.mean_grade >= min_grade:
+                results["processed"].append({
+                    "file": pdf_file.name,
+                    "grade": result.confidence.mean_grade,
+                    "document": result.document
+                })
+            else:
+                results["review_needed"].append({
+                    "file": pdf_file.name,
+                    "grade": result.confidence.mean_grade,
+                    "low_grade": result.confidence.low_grade,
+                    "document": result.document
+                })
+        
+        except Exception as e:
+            results["failed"].append({
+                "file": pdf_file.name,
+                "error": str(e)
+            })
+    
+    return results
+
+# Process directory
+results = batch_convert_with_quality_check(
+    "./documents",
+    min_grade=ConfidenceGrade.GOOD
+)
+
+print(f"Processed: {len(results['processed'])}")
+print(f"Review needed: {len(results['review_needed'])}")
+print(f"Failed: {len(results['failed'])}")
+```
+
+### Component-Specific Analysis
+
+```python
+from docling.document_converter import DocumentConverter
+from docling_core.types.doc import ConfidenceGrade
+
+def analyze_conversion_quality(file_path):
+    converter = DocumentConverter()
+    result = converter.convert(file_path)
+    
+    conf = result.confidence
+    
+    print(f"\n📄 Quality Report: {file_path}")
+    print("=" * 50)
+    print(f"Overall Mean Grade: {conf.mean_grade}")
+    print(f"Overall Low Grade: {conf.low_grade}")
+    print()
+    print("Component Breakdown:")
+    print(f"  Layout: {conf.layout_grade} (score: {conf.layout_score:.3f})")
+    print(f"  OCR: {conf.ocr_grade} (score: {conf.ocr_score:.3f})")
+    print(f"  Parse: {conf.parse_grade} (score: {conf.parse_score:.3f})")
+    print(f"  Table: {conf.table_grade} (score: {conf.table_score:.3f})")
+    
+    # Identify weak areas
+    weak_components = []
+    if conf.layout_grade < ConfidenceGrade.GOOD:
+        weak_components.append("layout detection")
+    if conf.ocr_grade < ConfidenceGrade.GOOD:
+        weak_components.append("OCR quality")
+    if conf.parse_grade < ConfidenceGrade.GOOD:
+        weak_components.append("text parsing")
+    
+    if weak_components:
+        print(f"\n⚠️ Weak areas: {', '.join(weak_components)}")
+    else:
+        print("\n✅ All components meet quality threshold")
+    
+    # Page-level analysis
+    poor_pages = [
+        p.page_no for p in conf.pages
+        if p.mean_grade == ConfidenceGrade.POOR
+    ]
+    
+    if poor_pages:
+        print(f"\n🔍 Pages needing attention: {poor_pages}")
+    
+    return result
+
+analyze_conversion_quality("complex_document.pdf")
+```
+
+### Export Quality Report
+
+```python
+import json
+from docling.document_converter import DocumentConverter
+
+def export_quality_report(file_path, output_json):
+    converter = DocumentConverter()
+    result = converter.convert(file_path)
+    
+    report = {
+        "document": file_path,
+        "overall": {
+            "mean_grade": str(result.confidence.mean_grade),
+            "low_grade": str(result.confidence.low_grade),
+        },
+        "components": {
+            "layout": {
+                "grade": str(result.confidence.layout_grade),
+                "score": result.confidence.layout_score,
+            },
+            "ocr": {
+                "grade": str(result.confidence.ocr_grade),
+                "score": result.confidence.ocr_score,
+            },
+            "parse": {
+                "grade": str(result.confidence.parse_grade),
+                "score": result.confidence.parse_score,
+            },
+            "table": {
+                "grade": str(result.confidence.table_grade),
+                "score": result.confidence.table_score,
+            },
+        },
+        "pages": [
+            {
+                "page_no": p.page_no,
+                "mean_grade": str(p.mean_grade),
+                "low_grade": str(p.low_grade),
+                "layout_grade": str(p.layout_grade),
+                "ocr_grade": str(p.ocr_grade),
+                "parse_grade": str(p.parse_grade),
+            }
+            for p in result.confidence.pages
+        ]
+    }
+    
+    with open(output_json, 'w') as f:
+        json.dump(report, f, indent=2)
+    
+    print(f"Quality report exported to {output_json}")
+    return report
+
+export_quality_report("document.pdf", "quality_report.json")
+```
+
+## Interpretation Guidelines
+
+<AccordionGroup>
+  <Accordion title="When to Trust Automated Processing">
+    - Mean grade is GOOD or EXCELLENT
+    - Low grade is at least FAIR
+    - All component grades are FAIR or better
+    - Use case allows for minor errors
+  </Accordion>
+
+  <Accordion title="When to Queue for Review">
+    - Mean grade is FAIR
+    - Low grade is POOR (indicates problem areas)
+    - Critical components (layout, OCR) have low grades
+    - High-accuracy requirements
+  </Accordion>
+
+  <Accordion title="When to Consider Re-processing">
+    - Mean grade is POOR
+    - Multiple components have POOR grades
+    - Try alternative pipelines or preprocessing
+    - Consider manual data entry for critical documents
+  </Accordion>
+
+  <Accordion title="OCR-Specific Considerations">
+    - Low OCR grades often indicate:
+      - Poor scan quality
+      - Unusual fonts or handwriting
+      - Complex layouts interfering with text detection
+    - Consider image preprocessing or different OCR engines
+  </Accordion>
+</AccordionGroup>
+
+## Visualization Example
+
+**Source**: ~/workspace/source/docs/concepts/confidence_scores.md:60
+
+![Confidence Scores Visualization](../assets/confidence_scores.png)
+
+*Example visualization showing document-level and page-level confidence grades*
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Grades, Not Scores" icon="medal">
+    Focus on categorical grades for decision-making. Numerical scores may change between versions.
+  </Card>
+  <Card title="Set Context-Appropriate Thresholds" icon="sliders">
+    Critical applications may require EXCELLENT grade, while general use can accept GOOD.
+  </Card>
+  <Card title="Monitor Component Scores" icon="chart-line">
+    Track which components typically cause issues to improve preprocessing.
+  </Card>
+  <Card title="Page-Level Granularity" icon="file-lines">
+    Use page-level confidence to identify specific problem areas in large documents.
+  </Card>
+</CardGroup>
+
+## Limitations
+
+- Confidence scores reflect model certainty, not absolute accuracy
+- Table scoring is not yet implemented
+- Score calculation may evolve in future versions
+- High confidence doesn't guarantee 100% accuracy
+- Low confidence doesn't always mean poor results
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Pipeline Selection" icon="route" href="/api/pipelines/standard-pdf">
+    Choose the right pipeline for quality
+  </Card>
+  <Card title="Quality Optimization" icon="wand-magic-sparkles" href="/guides/advanced-options">
+    Improve conversion quality
+  </Card>
+  <Card title="Batch Processing" icon="layer-group" href="/guides/batch-processing">
+    Process multiple documents efficiently
+  </Card>
+  <Card title="Error Handling" icon="shield-halved" href="/guides/advanced-options">
+    Handle conversion errors gracefully
+  </Card>
+</CardGroup>

@@ -1,0 +1,320 @@
+---
+title: VlmPipeline
+description: Vision-Language Model pipeline for document conversion using multimodal AI models
+---
+
+## Overview
+
+`VlmPipeline` uses Vision-Language Models (VLMs) to convert documents by processing page images directly. It supports multiple VLM backends and response formats for flexible document understanding.
+
+## Class Signature
+
+```python
+class VlmPipeline(PaginatedPipeline):
+    def __init__(self, pipeline_options: VlmPipelineOptions)
+```
+
+### Parameters
+
+<ParamField path="pipeline_options" type="VlmPipelineOptions" required>
+  Configuration options for the VLM pipeline
+  
+  <Expandable title="properties">
+    <ParamField path="vlm_options" type="VlmConvertOptions | InlineVlmOptions | ApiVlmOptions" required>
+      VLM model configuration. Use `VlmConvertOptions.from_preset()` for new runtime system
+    </ParamField>
+    
+    <ParamField path="force_backend_text" type="bool" default="false">
+      If True and using DOCTAGS format, extract text from backend using predicted bounding boxes
+    </ParamField>
+    
+    <ParamField path="generate_page_images" type="bool" default="false">
+      Generate page images in output
+    </ParamField>
+    
+    <ParamField path="generate_picture_images" type="bool" default="false">
+      Generate cropped images for picture elements
+    </ParamField>
+    
+    <ParamField path="images_scale" type="float" default="1.0">
+      Scale factor for generated images
+    </ParamField>
+    
+    <ParamField path="document_timeout" type="float | None">
+      Maximum time in seconds for document processing
+    </ParamField>
+    
+    <ParamField path="artifacts_path" type="str | None">
+      Path to directory containing model artifacts
+    </ParamField>
+    
+    <ParamField path="accelerator_options" type="AcceleratorOptions">
+      Hardware acceleration configuration (device, num_threads, etc.)
+    </ParamField>
+    
+    <ParamField path="enable_remote_services" type="bool" default="false">
+      Enable remote model services
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## VLM Options
+
+### VlmConvertOptions (Recommended)
+
+New runtime system with preset support:
+
+```python
+from docling.datamodel.pipeline_options import VlmConvertOptions
+
+# Using preset
+options = VlmConvertOptions.from_preset('smoldocling')
+
+# Custom configuration
+options = VlmConvertOptions(
+    model_spec=ModelSpec(...),
+    force_backend_text=False
+)
+```
+
+### Legacy Options (Deprecated)
+
+<Warning>
+  `InlineVlmOptions` and `ApiVlmOptions` are deprecated. Migrate to `VlmConvertOptions`.
+</Warning>
+
+## Response Formats
+
+The pipeline supports multiple VLM output formats:
+
+### DOCTAGS
+
+Structured format with document tags and bounding boxes:
+
+```python
+from docling.datamodel.pipeline_options_vlm_model import ResponseFormat
+
+options = VlmConvertOptions.from_preset('smoldocling')  # Uses DOCTAGS
+```
+
+### MARKDOWN
+
+Markdown output from VLM:
+
+```python
+options = VlmConvertOptions(
+    model_spec=ModelSpec(response_format=ResponseFormat.MARKDOWN)
+)
+```
+
+### HTML
+
+HTML output from VLM:
+
+```python
+options = VlmConvertOptions(
+    model_spec=ModelSpec(response_format=ResponseFormat.HTML)
+)
+```
+
+### DEEPSEEKOCR_MARKDOWN
+
+DeepSeek OCR markdown format with labeled bounding boxes:
+
+```python
+options = VlmConvertOptions(
+    model_spec=ModelSpec(response_format=ResponseFormat.DEEPSEEKOCR_MARKDOWN)
+)
+```
+
+Supported labels:
+- `text` - Standard body text
+- `title` - Main document or section titles
+- `sub_title` - Secondary headings
+- `table` - Tabular data
+- `table_caption` - Table descriptions
+- `figure` - Image-based elements
+- `figure_caption` - Figure descriptions
+- `header` / `footer` - Page margins content
+
+## Methods
+
+### execute
+
+Executes the pipeline on an input document.
+
+```python
+def execute(
+    self,
+    in_doc: InputDocument,
+    raises_on_error: bool
+) -> ConversionResult
+```
+
+<ParamField path="in_doc" type="InputDocument" required>
+  Input document to process (typically PDF)
+</ParamField>
+
+<ParamField path="raises_on_error" type="bool" required>
+  If True, raises exceptions on errors; otherwise captures them in ConversionResult
+</ParamField>
+
+<ResponseField name="return" type="ConversionResult">
+  Conversion result containing the processed document, pages, and VLM predictions
+</ResponseField>
+
+### initialize_page
+
+Initializes page resources and loads backend.
+
+```python
+def initialize_page(
+    self,
+    conv_res: ConversionResult,
+    page: Page
+) -> Page
+```
+
+<ParamField path="conv_res" type="ConversionResult" required>
+  Conversion result context
+</ParamField>
+
+<ParamField path="page" type="Page" required>
+  Page to initialize
+</ParamField>
+
+<ResponseField name="return" type="Page">
+  Initialized page with backend and size information
+</ResponseField>
+
+### get_default_options
+
+Returns default pipeline options.
+
+```python
+@classmethod
+def get_default_options(cls) -> VlmPipelineOptions
+```
+
+<ResponseField name="return" type="VlmPipelineOptions">
+  Default configuration for VlmPipeline
+</ResponseField>
+
+### is_backend_supported
+
+Checks if a backend is supported by this pipeline.
+
+```python
+@classmethod
+def is_backend_supported(cls, backend: AbstractDocumentBackend) -> bool
+```
+
+<ParamField path="backend" type="AbstractDocumentBackend" required>
+  Backend instance to check
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  True if backend is PdfDocumentBackend, False otherwise
+</ResponseField>
+
+## Inference Frameworks
+
+### Transformers (HuggingFace)
+
+```python
+from docling.datamodel.pipeline_options_vlm_model import (
+    InlineVlmOptions,
+    InferenceFramework
+)
+
+options = InlineVlmOptions(
+    inference_framework=InferenceFramework.TRANSFORMERS,
+    repo_id="HuggingFaceM4/SmolDocling-256M"
+)
+```
+
+### MLX (Apple Silicon)
+
+```python
+options = InlineVlmOptions(
+    inference_framework=InferenceFramework.MLX,
+    repo_id="mlx-community/SmolDocling-256M-4bit"
+)
+```
+
+### VLLM (High-performance)
+
+```python
+options = InlineVlmOptions(
+    inference_framework=InferenceFramework.VLLM,
+    repo_id="HuggingFaceM4/SmolDocling-256M"
+)
+```
+
+### API-based Models
+
+```python
+from docling.datamodel.pipeline_options_vlm_model import ApiVlmOptions
+
+options = ApiVlmOptions(
+    api_key="your-api-key",
+    model="gpt-4-vision"
+)
+```
+
+## Usage Example
+
+```python
+from docling.pipeline.vlm_pipeline import VlmPipeline
+from docling.datamodel.pipeline_options import (
+    VlmPipelineOptions,
+    VlmConvertOptions
+)
+from docling.datamodel.document import InputDocument
+
+# Configure pipeline with preset
+vlm_options = VlmConvertOptions.from_preset('smoldocling')
+
+pipeline_options = VlmPipelineOptions(
+    vlm_options=vlm_options,
+    generate_page_images=True,
+    images_scale=2.0
+)
+
+# Create pipeline
+pipeline = VlmPipeline(pipeline_options=pipeline_options)
+
+# Process document
+input_doc = InputDocument(path_or_stream="document.pdf")
+result = pipeline.execute(input_doc, raises_on_error=False)
+
+if result.status == ConversionStatus.SUCCESS:
+    doc = result.document
+    print(doc.export_to_markdown())
+```
+
+## Force Backend Text
+
+When using DOCTAGS format with `force_backend_text=True`, the pipeline:
+
+1. Uses VLM to predict bounding boxes and structure
+2. Extracts actual text from the PDF backend using those boxes
+3. Combines structure from VLM with text from backend
+
+This can improve text accuracy for documents with complex layouts.
+
+```python
+options = VlmPipelineOptions(
+    vlm_options=VlmConvertOptions.from_preset('smoldocling'),
+    force_backend_text=True  # Extract text from backend
+)
+```
+
+## Performance Considerations
+
+- VLM inference is typically slower than traditional OCR pipelines
+- Use GPU acceleration for better performance
+- Consider batch processing for multiple documents
+- MLX framework is optimized for Apple Silicon
+- VLLM provides best throughput for high-volume processing
+- API-based models offload computation but require network connectivity

@@ -1,0 +1,487 @@
+---
+title: Audio and Video Processing
+description: Transcribe audio and video files to text with Whisper-based ASR pipeline
+---
+
+## Overview
+
+Docling's ASR (Automatic Speech Recognition) pipeline converts audio and video files into structured `DoclingDocument` objects, just like PDFs or Word documents. This enables:
+
+- **Unified format**: Audio transcripts as `DoclingDocument` for consistent processing
+- **Multiple exports**: Markdown, JSON, HTML, DocTags from audio/video
+- **RAG integration**: Direct use with LangChain, LlamaIndex for searchable archives
+- **Automatic hardware optimization**: MLX Whisper on Apple Silicon, native Whisper elsewhere
+
+## Supported Formats
+
+<CardGroup cols={2}>
+  <Card title="Audio Formats" icon="music">
+    - WAV
+    - MP3
+    - M4A
+    - AAC
+    - OGG
+    - FLAC
+  </Card>
+  
+  <Card title="Video Formats" icon="video">
+    - MP4
+    - AVI
+    - MOV
+    
+    *Audio track is automatically extracted*
+  </Card>
+</CardGroup>
+
+<Note>
+**FFmpeg required** for M4A, AAC, OGG, FLAC, and all video formats. Install with your package manager:
+- macOS: `brew install ffmpeg`
+- Ubuntu/Debian: `apt-get install ffmpeg`
+- Windows: Download from [ffmpeg.org](https://ffmpeg.org/)
+</Note>
+
+## Installation
+
+Install Docling with ASR extras:
+
+<Tabs>
+  <Tab title="pip">
+    ```bash
+    pip install "docling[asr]"
+    ```
+  </Tab>
+  <Tab title="uv">
+    ```bash
+    uv add "docling[asr]"
+    ```
+  </Tab>
+</Tabs>
+
+## Basic Usage
+
+Transcribe an audio file:
+
+```python
+from pathlib import Path
+from docling.datamodel import asr_model_specs
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import AsrPipelineOptions
+from docling.document_converter import AudioFormatOption, DocumentConverter
+from docling.pipeline.asr_pipeline import AsrPipeline
+
+# Configure ASR pipeline
+pipeline_options = AsrPipelineOptions()
+pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.AUDIO: AudioFormatOption(
+            pipeline_cls=AsrPipeline,
+            pipeline_options=pipeline_options,
+        )
+    }
+)
+
+# Convert audio file
+result = converter.convert(Path("recording.mp3"))
+doc = result.document
+
+# Export to Markdown
+print(doc.export_to_markdown())
+```
+
+## Video Transcription
+
+The same code works for video files:
+
+```python
+from pathlib import Path
+from docling.datamodel import asr_model_specs
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import AsrPipelineOptions
+from docling.document_converter import AudioFormatOption, DocumentConverter
+from docling.pipeline.asr_pipeline import AsrPipeline
+
+pipeline_options = AsrPipelineOptions()
+pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.AUDIO: AudioFormatOption(
+            pipeline_cls=AsrPipeline,
+            pipeline_options=pipeline_options,
+        )
+    }
+)
+
+# Audio track is automatically extracted
+result = converter.convert(Path("meeting.mp4"))
+print(result.document.export_to_markdown())
+```
+
+<Note>
+Docling automatically extracts the audio track from video files. You don't need to run FFmpeg manually.
+</Note>
+
+## Output Format
+
+Transcripts are generated as paragraph-level Markdown with timestamps:
+
+```markdown
+[time: 0.0-4.0]  Shakespeare on Scenery by Oscar Wilde
+
+[time: 5.28-9.96]  This is a LibriVox recording. All LibriVox recordings are in the public domain.
+
+[time: 10.0-15.5]  The complete text of the essay appears in the book Intentions...
+```
+
+Each segment includes:
+- **Timestamp range**: Start and end time in seconds
+- **Transcribed text**: Recognized speech content
+- **Paragraph breaks**: Automatic segmentation
+
+## Available Models
+
+Docling supports multiple Whisper model sizes:
+
+```python
+from docling.datamodel import asr_model_specs
+
+# Available models (smallest to largest)
+pipeline_options.asr_options = asr_model_specs.WHISPER_TINY      # Fastest, lowest accuracy
+pipeline_options.asr_options = asr_model_specs.WHISPER_BASE      # Fast
+pipeline_options.asr_options = asr_model_specs.WHISPER_SMALL     # Balanced
+pipeline_options.asr_options = asr_model_specs.WHISPER_MEDIUM    # Better accuracy
+pipeline_options.asr_options = asr_model_specs.WHISPER_LARGE_V3  # Best accuracy
+pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO     # Recommended (default)
+```
+
+### Model Comparison
+
+| Model | Speed | Accuracy | Memory | Use Case |
+|-------|-------|----------|--------|----------|
+| **WHISPER_TURBO** | Fast | Excellent | Low | **Recommended** - Best balance |
+| WHISPER_TINY | Fastest | Basic | Minimal | Quick previews, low-resource |
+| WHISPER_BASE | Very Fast | Good | Low | Simple audio, speed priority |
+| WHISPER_SMALL | Fast | Good | Medium | General purpose |
+| WHISPER_MEDIUM | Medium | Better | Medium | Higher accuracy needs |
+| WHISPER_LARGE_V3 | Slow | Best | High | Maximum accuracy |
+
+<Note>
+`WHISPER_TURBO` is the default and recommended for most use cases. It provides excellent accuracy with fast processing.
+</Note>
+
+## Hardware Acceleration
+
+Docling automatically selects the best implementation:
+
+<Tabs>
+  <Tab title="Apple Silicon (Automatic)">
+    On M1/M2/M3 Macs, Docling automatically uses **MLX Whisper** for 5-10x faster processing:
+
+    ```python
+    from docling.datamodel import asr_model_specs
+    
+    # Automatically uses mlx-whisper on Apple Silicon
+    pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO
+    ```
+
+    **Installation (optional):**
+    ```bash
+    pip install mlx-whisper
+    ```
+
+    MLX Whisper is automatically detected and used if installed.
+  </Tab>
+  
+  <Tab title="CUDA GPU">
+    On systems with NVIDIA GPUs:
+
+    ```python
+    from docling.datamodel.pipeline_options import (
+        AsrPipelineOptions,
+        AcceleratorOptions,
+        AcceleratorDevice,
+    )
+    from docling.datamodel import asr_model_specs
+
+    pipeline_options = AsrPipelineOptions(
+        accelerator_options=AcceleratorOptions(
+            device=AcceleratorDevice.CUDA,
+        ),
+        asr_options=asr_model_specs.WHISPER_TURBO,
+    )
+    ```
+  </Tab>
+  
+  <Tab title="CPU">
+    CPU-only processing:
+
+    ```python
+    from docling.datamodel import asr_model_specs
+    
+    # Uses native Whisper on CPU
+    pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO
+    ```
+
+    Use smaller models for better CPU performance:
+    ```python
+    pipeline_options.asr_options = asr_model_specs.WHISPER_BASE
+    ```
+  </Tab>
+</Tabs>
+
+## Export Formats
+
+Export transcripts to various formats:
+
+<CodeGroup>
+```python Markdown
+# Paragraph-level Markdown with timestamps
+markdown = doc.export_to_markdown()
+print(markdown)
+
+# Save to file
+doc.save_as_markdown("transcript.md")
+```
+
+```python Plain Text
+# Remove timestamps for plain text
+text = doc.export_to_markdown(strict_text=True)
+print(text)
+
+# Save to file
+doc.save_as_markdown("transcript.txt", strict_text=True)
+```
+
+```python JSON
+import json
+
+# Structured JSON with metadata
+data = doc.export_to_dict()
+json_str = json.dumps(data, indent=2)
+
+# Save to file
+doc.save_as_json("transcript.json")
+```
+
+```python HTML
+# HTML with formatted transcript
+html = doc.export_to_html()
+
+# Save to file
+doc.save_as_html("transcript.html")
+```
+
+```python DocTags
+# DocTags format for downstream processing
+doctags = doc.export_to_doctags()
+
+# Save to file
+doc.save_as_doctags("transcript.doctags.txt")
+```
+</CodeGroup>
+
+## Batch Transcription
+
+Process multiple audio/video files:
+
+```python
+from pathlib import Path
+from docling.datamodel import asr_model_specs
+from docling.datamodel.base_models import InputFormat, ConversionStatus
+from docling.datamodel.pipeline_options import AsrPipelineOptions
+from docling.document_converter import AudioFormatOption, DocumentConverter
+from docling.pipeline.asr_pipeline import AsrPipeline
+
+pipeline_options = AsrPipelineOptions()
+pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.AUDIO: AudioFormatOption(
+            pipeline_cls=AsrPipeline,
+            pipeline_options=pipeline_options,
+        )
+    }
+)
+
+# Find all audio files
+audio_dir = Path("recordings/")
+audio_files = list(audio_dir.glob("*.mp3")) + list(audio_dir.glob("*.mp4"))
+
+print(f"Found {len(audio_files)} files")
+
+# Batch process
+for result in converter.convert_all(audio_files, raises_on_error=False):
+    if result.status == ConversionStatus.SUCCESS:
+        output_path = f"transcripts/{result.input.file.stem}.md"
+        result.document.save_as_markdown(output_path)
+        print(f"Transcribed: {result.input.file.name} -> {output_path}")
+    else:
+        print(f"Failed: {result.input.file.name}")
+```
+
+## RAG Integration
+
+Build searchable knowledge bases from audio archives:
+
+### LangChain Integration
+
+```python
+from langchain_docling import DoclingLoader
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+
+# Load and chunk all audio files in a directory
+loader = DoclingLoader("recordings/")
+docs = loader.load()
+
+# Embed and index
+vectorstore = FAISS.from_documents(docs, OpenAIEmbeddings())
+retriever = vectorstore.as_retriever()
+
+# Query in natural language
+results = retriever.invoke("What did we decide about the auth service?")
+for doc in results:
+    print(doc.page_content)
+```
+
+### Standalone Transcription Script
+
+Complete example for processing a directory:
+
+```python
+from pathlib import Path
+from docling.datamodel import asr_model_specs
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import AsrPipelineOptions
+from docling.document_converter import AudioFormatOption, DocumentConverter
+from docling.pipeline.asr_pipeline import AsrPipeline
+
+def transcribe_directory(input_dir: Path, output_dir: Path):
+    """Transcribe all audio/video files in a directory."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    pipeline_options = AsrPipelineOptions()
+    pipeline_options.asr_options = asr_model_specs.WHISPER_TURBO
+    
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.AUDIO: AudioFormatOption(
+                pipeline_cls=AsrPipeline,
+                pipeline_options=pipeline_options,
+            )
+        }
+    )
+    
+    # Find all supported files
+    files = []
+    for pattern in ["*.mp3", "*.wav", "*.m4a", "*.mp4", "*.mov"]:
+        files.extend(input_dir.glob(pattern))
+    
+    print(f"Found {len(files)} files to transcribe")
+    
+    for result in converter.convert_all(files, raises_on_error=False):
+        if result.status == ConversionStatus.SUCCESS:
+            output_path = output_dir / f"{result.input.file.stem}.md"
+            result.document.save_as_markdown(output_path)
+            print(f"✓ {result.input.file.name}")
+        else:
+            print(f"✗ {result.input.file.name}")
+
+if __name__ == "__main__":
+    transcribe_directory(
+        input_dir=Path("recordings"),
+        output_dir=Path("transcripts"),
+    )
+```
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Meeting Archives" icon="users">
+    Make recorded meetings searchable. Process company all-hands, customer calls, and design reviews into a queryable knowledge base.
+  </Card>
+  
+  <Card title="Podcast Transcription" icon="podcast">
+    Generate transcripts for podcasts, enabling search, SEO, and accessibility.
+  </Card>
+  
+  <Card title="Lecture Notes" icon="graduation-cap">
+    Convert recorded lectures to searchable text for study materials and accessibility.
+  </Card>
+  
+  <Card title="Video Documentation" icon="film">
+    Extract text from tutorial videos, demos, and documentation for text-based search.
+  </Card>
+</CardGroup>
+
+## Limitations
+
+| Limitation | Workaround |
+|-----------|------------|
+| No SRT/WebVTT subtitle output | Use `openai-whisper` CLI: `whisper audio.mp3 --output_format srt` |
+| No speaker diarization | Use [`pyannote-audio`](https://github.com/pyannote/pyannote-audio) as pre/post-processing |
+| No word-level timestamps | Not available in current export formats |
+| Paragraph-level only | Sufficient for RAG, search, and summarization use cases |
+
+<Note>
+For subtitle generation workflows, use the `openai-whisper` CLI directly. Docling's ASR pipeline is optimized for knowledge retrieval (RAG, search, summarization).
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="FFmpeg not found">
+    Install FFmpeg:
+    
+    ```bash
+    # macOS
+    brew install ffmpeg
+    
+    # Ubuntu/Debian
+    sudo apt-get install ffmpeg
+    
+    # Verify installation
+    ffmpeg -version
+    ```
+  </Accordion>
+  
+  <Accordion title="Slow transcription">
+    - Use a smaller model: `asr_model_specs.WHISPER_BASE`
+    - Install MLX Whisper on Apple Silicon: `pip install mlx-whisper`
+    - Enable GPU acceleration on CUDA systems
+    - Process files in parallel batches
+  </Accordion>
+  
+  <Accordion title="Poor transcription quality">
+    - Use a larger model: `asr_model_specs.WHISPER_LARGE_V3`
+    - Ensure audio quality is good (clear speech, minimal background noise)
+    - For multilingual audio, Whisper automatically detects languages
+    - Check that audio format is supported
+  </Accordion>
+  
+  <Accordion title="Out of memory">
+    - Use a smaller Whisper model
+    - Process fewer files concurrently
+    - Split long audio files into chunks
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Export Formats" icon="file-export" href="/guides/export-formats">
+    Learn about all export format options
+  </Card>
+  <Card title="Batch Processing" icon="layer-group" href="/guides/batch-processing">
+    Optimize processing for large audio archives
+  </Card>
+  <Card title="LangChain Integration" icon="link" href="/integrations/langchain">
+    Build RAG pipelines with transcribed audio
+  </Card>
+  <Card title="Advanced Options" icon="sliders" href="/guides/advanced-options">
+    Configure hardware acceleration and timeouts
+  </Card>
+</CardGroup>

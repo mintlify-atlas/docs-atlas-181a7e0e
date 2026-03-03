@@ -1,0 +1,304 @@
+---
+title: CLI Commands
+description: Reference documentation for Docling CLI commands
+---
+
+Docling provides a powerful command-line interface for document conversion and model management.
+
+## Main Commands
+
+### `docling convert`
+
+Convert documents from various formats to different output formats.
+
+```bash
+docling convert [OPTIONS] SOURCE...
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `SOURCE` | PDF files to convert. Can be local file paths, directory paths, or URLs. Multiple sources can be specified. |
+
+#### Basic Examples
+
+**Convert a single PDF to Markdown:**
+```bash
+docling convert document.pdf
+```
+
+**Convert multiple documents:**
+```bash
+docling convert doc1.pdf doc2.docx doc3.pptx
+```
+
+**Convert all PDFs in a directory:**
+```bash
+docling convert /path/to/documents/
+```
+
+**Convert from URL:**
+```bash
+docling convert https://example.com/document.pdf
+```
+
+**Convert to specific output formats:**
+```bash
+docling convert document.pdf --to json --to html --to markdown
+```
+
+#### Output Format Options
+
+| Option | Description |
+|--------|-------------|
+| `--from` | Specify input formats to convert from. Defaults to all formats. |
+| `--to` | Specify output formats. Available: `json`, `yaml`, `html`, `html_split_page`, `markdown`, `text`, `doctags`, `vtt`. Defaults to `markdown`. |
+| `--output` | Output directory where results are saved. Default: current directory (`.`) |
+| `--image-export-mode` | Image export mode. Options: `placeholder`, `embedded`, `referenced`. Default: `embedded` |
+| `--show-layout` | If enabled, page images will show bounding boxes of items. |
+
+#### Pipeline Options
+
+| Option | Description |
+|--------|-------------|
+| `--pipeline` | Choose the processing pipeline. Options: `standard`, `vlm`. Default: `standard` |
+| `--vlm-model` | Choose the VLM preset to use (when using VLM pipeline). Default: `granite_docling`. Available presets include: `granite_docling`, `smol_docling`, etc. |
+| `--asr-model` | Choose the ASR model for audio/video files. Options include: `whisper_tiny`, `whisper_base`, `whisper_small`, `whisper_medium`, `whisper_large`, `whisper_turbo`, and MLX/native variants. Default: `whisper_tiny` |
+
+#### Processing Options
+
+| Option | Description |
+|--------|-------------|
+| `--ocr` / `--no-ocr` | Enable/disable OCR for bitmap content. Default: enabled |
+| `--force-ocr` | Replace any existing text with OCR generated text over the full content. |
+| `--ocr-engine` | The OCR engine to use. Default: `auto` (available: `auto`, `tesseract_cli`, `tesseract`, `easyocr`, `rapidocr`) |
+| `--ocr-lang` | Comma-separated list of languages for OCR engine. |
+| `--psm` | Page Segmentation Mode for OCR engine (0-13). |
+| `--tables` / `--no-tables` | Enable/disable table structure extraction. Default: enabled |
+| `--table-mode` | Table structure model mode. Options: `fast`, `accurate`. Default: `accurate` |
+
+#### Enrichment Options
+
+| Option | Description |
+|--------|-------------|
+| `--enrich-code` | Enable code enrichment model in the pipeline. |
+| `--enrich-formula` | Enable formula enrichment model in the pipeline. |
+| `--enrich-picture-classes` | Enable picture classification enrichment model. |
+| `--enrich-picture-description` | Enable picture description model. |
+| `--enrich-chart-extraction` | Enable chart extraction to convert bar, pie, and line charts to tabular format. |
+
+#### PDF Backend Options
+
+| Option | Description |
+|--------|-------------|
+| `--pdf-backend` | The PDF backend to use. Options: `docling_parse`, `pypdfium2`. Default: `docling_parse` |
+| `--pdf-password` | Password for protected PDF documents. |
+
+#### Performance Options
+
+| Option | Description |
+|--------|-------------|
+| `--num-threads` | Number of threads. Default: `4` |
+| `--device` | Accelerator device. Options: `auto`, `cpu`, `cuda`, `mps`. Default: `auto` |
+| `--page-batch-size` | Number of pages processed in one batch. |
+| `--document-timeout` | Timeout for processing each document, in seconds. |
+
+#### Model and Plugin Options
+
+| Option | Description |
+|--------|-------------|
+| `--artifacts-path` | Location of the model artifacts (for offline use). |
+| `--enable-remote-services` | Must be enabled when using models connecting to remote services. |
+| `--allow-external-plugins` | Must be enabled for loading modules from third-party plugins. |
+| `--show-external-plugins` | List third-party plugins available with `--allow-external-plugins`. |
+
+#### Debug Options
+
+| Option | Description |
+|--------|-------------|
+| `--debug-visualize-cells` | Enable debug output which visualizes PDF cells. |
+| `--debug-visualize-ocr` | Enable debug output which visualizes OCR cells. |
+| `--debug-visualize-layout` | Enable debug output which visualizes layout clusters. |
+| `--debug-visualize-tables` | Enable debug output which visualizes table cells. |
+
+#### Profiling Options
+
+| Option | Description |
+|--------|-------------|
+| `--profiling` | Summarize profiling details for all conversion stages. |
+| `--save-profiling` | Save profiling summaries to JSON. |
+
+#### Other Options
+
+| Option | Description |
+|--------|-------------|
+| `--headers` | Specify HTTP request headers for URL sources (JSON string). |
+| `--abort-on-error` / `--no-abort-on-error` | If enabled, processing aborts on first error. Default: disabled |
+| `-v`, `--verbose` | Set verbosity level. Use `-v` for info logging, `-vv` for debug logging. |
+| `--version` | Show version information. |
+| `--logo` | Display Docling ASCII art logo. |
+
+#### Advanced Examples
+
+**Convert with OCR and table extraction:**
+```bash
+docling convert document.pdf --ocr --tables --ocr-engine easyocr
+```
+
+**Convert to multiple formats with custom output:**
+```bash
+docling convert document.pdf --to json --to markdown --to html --output ./output
+```
+
+**Use VLM pipeline with specific model:**
+```bash
+docling convert document.pdf --pipeline vlm --vlm-model granite_docling
+```
+
+**Convert with enrichment features:**
+```bash
+docling convert document.pdf \
+  --enrich-formula \
+  --enrich-code \
+  --enrich-picture-description \
+  --enrich-chart-extraction
+```
+
+**Convert password-protected PDF:**
+```bash
+docling convert protected.pdf --pdf-password "mypassword"
+```
+
+**Convert directory with profiling:**
+```bash
+docling convert ./documents --profiling --save-profiling --output ./results
+```
+
+**Convert with custom HTTP headers:**
+```bash
+docling convert https://example.com/doc.pdf \
+  --headers '{"Authorization": "Bearer token123", "User-Agent": "Docling"}'
+```
+
+---
+
+## Tools Commands
+
+Docling provides helper commands for managing models and other utilities.
+
+### `docling tools models download`
+
+Download Docling models for offline use.
+
+```bash
+docling tools models download [OPTIONS] [MODELS]...
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `MODELS` | Specific models to download. Available options: `layout`, `tableformer`, `code_formula`, `picture_classifier`, `smolvlm`, `granitedocling`, `granitedocling_mlx`, `smoldocling`, `smoldocling_mlx`, `granite_vision`, `granite_chart_extraction`, `rapidocr`, `easyocr`. |
+
+#### Options
+
+| Option | Description |
+|--------|-------------|
+| `-o`, `--output-dir` | Directory where models will be downloaded. Default: system cache directory |
+| `--force` | Force download even if models already exist. |
+| `--all` | Download all available models (mutually exclusive with specifying models). |
+| `-q`, `--quiet` | Minimal output, prints only the output directory. |
+
+#### Examples
+
+**Download default models:**
+```bash
+docling tools models download
+```
+
+This downloads the default set: `layout`, `tableformer`, `code_formula`, `picture_classifier`, and `rapidocr`.
+
+**Download specific models:**
+```bash
+docling tools models download layout tableformer easyocr
+```
+
+**Download all available models:**
+```bash
+docling tools models download --all
+```
+
+**Download to custom directory:**
+```bash
+docling tools models download --output-dir /path/to/models
+```
+
+**Force re-download:**
+```bash
+docling tools models download layout --force
+```
+
+**Quiet mode (useful for scripts):**
+```bash
+MODEL_DIR=$(docling tools models download --quiet)
+echo "Models are in: $MODEL_DIR"
+```
+
+**Use downloaded models:**
+```bash
+# First download models
+docling tools models download --output-dir ./my-models
+
+# Then use them with convert
+docling convert document.pdf --artifacts-path ./my-models
+```
+
+---
+
+### `docling tools models download-hf-repo`
+
+Download specific models from HuggingFace by repository ID.
+
+```bash
+docling tools models download-hf-repo [OPTIONS] MODELS...
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `MODELS` | HuggingFace repository IDs to download (e.g., `docling-project/docling-models`). |
+
+#### Options
+
+| Option | Description |
+|--------|-------------|
+| `-o`, `--output-dir` | Directory where models will be downloaded. Default: system cache directory |
+| `--force` | Force download even if model already exists. |
+| `-q`, `--quiet` | Minimal output, prints only the output directory. |
+
+#### Examples
+
+**Download a HuggingFace model:**
+```bash
+docling tools models download-hf-repo docling-project/docling-models
+```
+
+**Download multiple HuggingFace models:**
+```bash
+docling tools models download-hf-repo \
+  docling-project/docling-models \
+  some-org/custom-model
+```
+
+**Download to custom directory:**
+```bash
+docling tools models download-hf-repo docling-project/docling-models \
+  --output-dir /path/to/models
+```
+
+**Force re-download:**
+```bash
+docling tools models download-hf-repo docling-project/docling-models --force
+```

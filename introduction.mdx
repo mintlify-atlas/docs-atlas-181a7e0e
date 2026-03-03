@@ -1,0 +1,158 @@
+---
+title: Introduction to Docling
+description: Parse and convert documents with advanced AI-powered understanding for gen AI applications
+---
+
+Docling simplifies document processing, parsing diverse formats — including advanced PDF understanding — and providing seamless integrations with the gen AI ecosystem.
+
+## What is Docling?
+
+Docling is a powerful SDK and CLI tool that converts documents from various formats (PDF, DOCX, PPTX, HTML, images, audio, and more) into a unified, structured representation perfect for downstream AI workflows. With state-of-the-art PDF understanding capabilities, OCR support, and native integrations with popular AI frameworks, Docling accelerates your document AI applications.
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Get started with pip, uv, or your preferred package manager
+  </Card>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Convert your first document in minutes with simple Python code
+  </Card>
+  <Card title="Core concepts" icon="book" href="/concepts/architecture">
+    Learn about Docling's architecture and key components
+  </Card>
+  <Card title="Usage guides" icon="map" href="/guides/basic-conversion">
+    Explore detailed guides for common workflows
+  </Card>
+</CardGroup>
+
+## Key features
+
+### Multi-format support
+
+Docling handles multiple document formats out of the box:
+
+- **PDF** with advanced layout understanding, reading order, table structure, formulas, and more
+- **Office documents**: DOCX, PPTX, XLSX
+- **Web formats**: HTML
+- **Images**: PNG, TIFF, JPEG with OCR support
+- **Audio**: WAV, MP3 with Automatic Speech Recognition (ASR)
+- **Specialized formats**: LaTeX, WebVTT, XBRL financial reports, JATS articles, USPTO patents
+
+### Advanced PDF understanding
+
+Docling excels at PDF processing with:
+
+- **Page layout analysis** - Detect headers, paragraphs, lists, tables, figures, and formulas
+- **Reading order detection** - Preserve logical document flow
+- **Table structure recognition** - Extract tables with accurate cell relationships
+- **Code block detection** - Identify and preserve code snippets
+- **Formula understanding** - Recognize mathematical equations
+- **Image classification** - Categorize figures and diagrams
+
+### Unified document representation
+
+All documents are converted to the expressive [DoclingDocument](/concepts/docling-document) format, providing:
+
+- **Structured content** with hierarchical organization
+- **Metadata preservation** including fonts, styles, and layout information
+- **Relationship tracking** between document elements
+- **Export flexibility** to Markdown, HTML, JSON, DocTags, and more
+
+### AI framework integrations
+
+Plug-and-play integrations with popular frameworks:
+
+<CardGroup cols={2}>
+  <Card title="LangChain" icon="link" href="/integrations/langchain">
+    Build RAG applications with LangChain document loaders
+  </Card>
+  <Card title="LlamaIndex" icon="llama" href="/integrations/llamaindex">
+    Index and query documents with LlamaIndex readers
+  </Card>
+  <Card title="Haystack" icon="haystack" href="/integrations/haystack">
+    Create search pipelines with Haystack converters
+  </Card>
+  <Card title="Crew AI" icon="users" href="/integrations/crewai">
+    Power AI agents with structured document data
+  </Card>
+</CardGroup>
+
+### Privacy and security
+
+Docling supports local execution for sensitive data and air-gapped environments - all processing happens on your infrastructure with no external API calls required.
+
+## What's new
+
+<Note>
+Docling is actively developed with frequent improvements and new features.
+</Note>
+
+- **Structured information extraction** - Extract specific data using schemas [beta]
+- **Heron layout model** - Faster PDF parsing by default
+- **MCP server** - Connect to agentic applications via Model Context Protocol
+- **XBRL parsing** - Process financial reports in eXtensible Business Reporting Language
+- **WebVTT support** - Parse and export Web Video Text Tracks
+- **LaTeX parsing** - Convert LaTeX documents to structured format
+
+## Use cases
+
+Docling powers a wide range of document AI applications:
+
+- **RAG (Retrieval-Augmented Generation)** - Convert documents for vector databases and semantic search
+- **Document Q&A** - Extract structured content for question answering systems
+- **Data extraction** - Pull tables, figures, and structured data from reports
+- **Archive digitization** - OCR and structure legacy documents
+- **Compliance & analysis** - Process financial reports, patents, and regulatory documents
+- **Content migration** - Convert documents between formats while preserving structure
+
+## Technical foundation
+
+Docling leverages cutting-edge AI models including:
+
+- **Layout models** (Heron) for page segmentation
+- **Table structure models** for accurate table extraction
+- **Visual Language Models** (GraniteDocling) for enhanced understanding
+- **OCR engines** (EasyOCR, Tesseract, RapidOCR, macOS Vision)
+- **ASR models** (Whisper with MLX acceleration on Apple Silicon)
+
+For technical details, see the [Docling Technical Report](https://arxiv.org/abs/2408.09869) (arXiv:2408.09869).
+
+## Get started
+
+<Steps>
+  <Step title="Install Docling">
+    Install via pip or your preferred package manager
+    ```bash
+    pip install docling
+    ```
+  </Step>
+  <Step title="Convert a document">
+    Run your first conversion with 3 lines of code
+    ```python
+    from docling.document_converter import DocumentConverter
+    
+    converter = DocumentConverter()
+    result = converter.convert("document.pdf")
+    print(result.document.export_to_markdown())
+    ```
+  </Step>
+  <Step title="Explore capabilities">
+    Check out [usage guides](/guides/basic-conversion) and [examples](/examples/simple-conversion) to learn more
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Installation guide" icon="download" href="/installation">
+    Detailed installation instructions for all platforms
+  </Card>
+  <Card title="Quick start tutorial" icon="rocket" href="/quickstart">
+    Complete walkthrough with working examples
+  </Card>
+  <Card title="Join the community" icon="discord" href="https://docling.ai/discord">
+    Get help and share your projects on Discord
+  </Card>
+  <Card title="GitHub repository" icon="github" href="https://github.com/docling-project/docling">
+    Star the project and contribute on GitHub
+  </Card>
+</CardGroup>

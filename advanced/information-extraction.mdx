@@ -1,0 +1,404 @@
+---
+title: Information Extraction
+description: Extract structured information from documents using template-based extraction with vision-language models
+---
+
+## Overview
+
+Docling's information extraction feature enables you to extract structured data from documents using a template-based approach. This is particularly useful for:
+
+- Extracting specific fields from forms and invoices
+- Parsing structured documents with known schemas
+- Converting semi-structured documents into JSON or Pydantic models
+- Building document understanding pipelines
+
+The extraction API uses vision-language models (VLMs) to understand document content and extract information according to your specified template.
+
+<Note>
+The extraction API is currently experimental and may change without prior notice. Only PDF and image formats are supported.
+</Note>
+
+## Quick Start
+
+```python
+from docling.document_extractor import DocumentExtractor
+from pydantic import BaseModel
+
+class Invoice(BaseModel):
+    invoice_number: str
+    date: str
+    total_amount: float
+    vendor_name: str
+
+extractor = DocumentExtractor()
+result = extractor.extract(
+    source="invoice.pdf",
+    template=Invoice
+)
+
+print(result.pages[0].extracted_data)
+```
+
+## Document Extractor API
+
+### Initialization
+
+The `DocumentExtractor` class provides the main interface for extraction:
+
+```python
+from docling.document_extractor import DocumentExtractor
+from docling.datamodel.base_models import InputFormat
+
+extractor = DocumentExtractor(
+    allowed_formats=[InputFormat.PDF, InputFormat.IMAGE]
+)
+```
+
+**Parameters:**
+- `allowed_formats`: List of input formats to process (default: all formats)
+- `extraction_format_options`: Per-format configuration (see [Configuration](#configuration))
+
+### Single Document Extraction
+
+Extract from a single document using the `extract()` method:
+
+```python
+result = extractor.extract(
+    source="document.pdf",
+    template=YourTemplate,
+    raises_on_error=True,
+    max_num_pages=10,
+    page_range=[1, 5]
+)
+```
+
+**Source**: ~/workspace/source/docling/document_extractor.py:126
+
+**Parameters:**
+- `source`: Path (str/Path) or DocumentStream to the document
+- `template`: Extraction template (string, dict, Pydantic model, or BaseModel class)
+- `headers`: Optional HTTP headers for remote documents
+- `raises_on_error`: Whether to raise exceptions on errors (default: True)
+- `max_num_pages`: Maximum number of pages to process
+- `max_file_size`: Maximum file size in bytes
+- `page_range`: Specific page range to extract
+
+**Returns:** `ExtractionResult` object with extracted data
+
+### Batch Extraction
+
+Process multiple documents efficiently:
+
+```python
+sources = ["doc1.pdf", "doc2.pdf", "doc3.pdf"]
+
+for result in extractor.extract_all(
+    source=sources,
+    template=YourTemplate
+):
+    print(f"Extracted from {result.input.file.name}")
+    for page in result.pages:
+        print(page.extracted_data)
+```
+
+**Source**: ~/workspace/source/docling/document_extractor.py:147
+
+## Extraction Templates
+
+### Using Pydantic Models
+
+Define structured schemas using Pydantic:
+
+```python
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+class ContactInfo(BaseModel):
+    email: str = Field(description="Email address")
+    phone: Optional[str] = Field(description="Phone number")
+
+class Resume(BaseModel):
+    name: str
+    title: str
+    contact: ContactInfo
+    skills: List[str]
+    experience_years: int
+
+result = extractor.extract(
+    source="resume.pdf",
+    template=Resume
+)
+```
+
+The VLM uses field names, types, and descriptions to guide extraction.
+
+### Using Dictionaries
+
+For simpler use cases, use dictionary templates:
+
+```python
+template = {
+    "product_name": "string",
+    "price": "float",
+    "in_stock": "boolean",
+    "categories": "list of strings"
+}
+
+result = extractor.extract(
+    source="product.pdf",
+    template=template
+)
+```
+
+### Using String Prompts
+
+Provide natural language instructions:
+
+```python
+template = """
+Extract the following information:
+- Meeting title
+- Date and time
+- Attendees (as a list)
+- Action items (as a list)
+"""
+
+result = extractor.extract(
+    source="meeting_notes.pdf",
+    template=template
+)
+```
+
+## Extraction Results
+
+The `ExtractionResult` object contains:
+
+**Source**: ~/workspace/source/docling/datamodel/extraction.py:25
+
+```python
+class ExtractionResult:
+    input: InputDocument           # Input document metadata
+    status: ConversionStatus       # SUCCESS, FAILURE, PARTIAL_SUCCESS
+    errors: List[ErrorItem]        # Any errors encountered
+    pages: List[ExtractedPageData] # Extracted data per page
+```
+
+### Page-Level Data
+
+Each page contains:
+
+**Source**: ~/workspace/source/docling/datamodel/extraction.py:11
+
+```python
+class ExtractedPageData:
+    page_no: int                           # 1-indexed page number
+    extracted_data: Optional[Dict[str, Any]]  # Structured data
+    raw_text: Optional[str]                # Raw extracted text
+    errors: List[str]                      # Page-specific errors
+```
+
+### Accessing Results
+
+```python
+result = extractor.extract(source="doc.pdf", template=MyTemplate)
+
+# Check status
+if result.status == ConversionStatus.SUCCESS:
+    # Access first page data
+    page_data = result.pages[0].extracted_data
+    
+    # Validate against Pydantic model
+    validated = MyTemplate(**page_data)
+    print(validated.model_dump_json(indent=2))
+
+# Handle errors
+for error in result.errors:
+    print(f"Error in {error.component_type}: {error.error_message}")
+```
+
+## Configuration
+
+### Custom Pipeline Options
+
+Configure the extraction pipeline per format:
+
+```python
+from docling.document_extractor import (
+    DocumentExtractor,
+    ExtractionFormatOption
+)
+from docling.pipeline.extraction_vlm_pipeline import ExtractionVlmPipeline
+from docling.datamodel.pipeline_options import PipelineOptions
+from docling.datamodel.base_models import InputFormat
+from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+
+pipeline_options = PipelineOptions()
+# Configure VLM settings here
+
+extractor = DocumentExtractor(
+    extraction_format_options={
+        InputFormat.PDF: ExtractionFormatOption(
+            pipeline_cls=ExtractionVlmPipeline,
+            pipeline_options=pipeline_options,
+            backend=PyPdfiumDocumentBackend
+        )
+    }
+)
+```
+
+**Source**: ~/workspace/source/docling/document_extractor.py:48
+
+### Batch Processing Settings
+
+Control concurrency and batch sizes:
+
+```python
+from docling.datamodel.settings import settings
+
+# Adjust batch size for extraction
+settings.perf.doc_batch_size = 10
+settings.perf.doc_batch_concurrency = 4
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Template Design">
+    - Use descriptive field names that match document terminology
+    - Add Field descriptions for complex extractions
+    - Use appropriate types (str, int, float, bool, List, Optional)
+    - Keep templates focused on specific document types
+  </Accordion>
+
+  <Accordion title="Error Handling">
+    ```python
+    try:
+        result = extractor.extract(
+            source="document.pdf",
+            template=MyTemplate,
+            raises_on_error=True
+        )
+    except ConversionError as e:
+        print(f"Extraction failed: {e}")
+        # Fallback logic
+    ```
+  </Accordion>
+
+  <Accordion title="Performance Optimization">
+    - Use page_range to extract specific pages only
+    - Set max_num_pages for large documents
+    - Process batches for multiple documents
+    - Consider using GPU acceleration for VLMs
+  </Accordion>
+
+  <Accordion title="Validation">
+    ```python
+    # Validate extracted data
+    from pydantic import ValidationError
+    
+    try:
+        validated = MyTemplate(**result.pages[0].extracted_data)
+    except ValidationError as e:
+        print("Validation errors:")
+        for error in e.errors():
+            print(f"  {error['loc']}: {error['msg']}")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Examples
+
+### Invoice Extraction
+
+```python
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from datetime import date
+
+class LineItem(BaseModel):
+    description: str
+    quantity: int
+    unit_price: float
+    total: float
+
+class Invoice(BaseModel):
+    invoice_number: str = Field(description="Invoice ID or number")
+    invoice_date: str = Field(description="Invoice issue date")
+    due_date: Optional[str] = Field(description="Payment due date")
+    vendor_name: str
+    vendor_address: Optional[str]
+    customer_name: str
+    line_items: List[LineItem]
+    subtotal: float
+    tax: float
+    total_amount: float
+
+extractor = DocumentExtractor()
+result = extractor.extract(
+    source="invoice.pdf",
+    template=Invoice
+)
+
+invoice_data = Invoice(**result.pages[0].extracted_data)
+print(f"Invoice #{invoice_data.invoice_number}")
+print(f"Total: ${invoice_data.total_amount}")
+```
+
+### Form Data Extraction
+
+```python
+class ApplicationForm(BaseModel):
+    applicant_name: str
+    date_of_birth: str
+    ssn: Optional[str] = Field(description="Social Security Number")
+    address: str
+    employment_status: str
+    annual_income: float
+    signature_present: bool = Field(
+        description="Whether signature is present on form"
+    )
+
+result = extractor.extract(
+    source="application.pdf",
+    template=ApplicationForm
+)
+```
+
+### Multi-Page Document
+
+```python
+# Extract from each page separately
+result = extractor.extract(
+    source="multi_page_report.pdf",
+    template=SectionTemplate
+)
+
+for page in result.pages:
+    print(f"\nPage {page.page_no}:")
+    print(page.extracted_data)
+```
+
+## Limitations
+
+- Currently experimental API - subject to change
+- Only PDF and image formats supported
+- Extraction quality depends on VLM model capabilities
+- Complex tables may require specialized table extraction
+- Performance varies with document complexity and template structure
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="VLM Pipeline" icon="brain" href="/api/pipelines/vlm">
+    Learn about vision-language model pipelines
+  </Card>
+  <Card title="Model Catalog" icon="book" href="/advanced/model-catalog">
+    Available VLM models for extraction
+  </Card>
+  <Card title="GPU Acceleration" icon="microchip" href="/advanced/gpu-acceleration">
+    Speed up extraction with GPU support
+  </Card>
+  <Card title="Pipeline Options" icon="sliders" href="/api/options/pipeline-options">
+    Configure extraction pipelines
+  </Card>
+</CardGroup>

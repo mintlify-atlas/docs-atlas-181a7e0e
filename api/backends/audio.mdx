@@ -1,0 +1,425 @@
+---
+title: Audio Backend
+description: Audio file transcription using Automatic Speech Recognition
+---
+
+## Overview
+
+The Audio backend processes audio files and converts speech to text using Automatic Speech Recognition (ASR) models. It supports various audio formats and uses Whisper-based models for high-quality transcription.
+
+## Features
+
+- **Multi-format support** - MP3, WAV, FLAC, OGG, M4A, WEBM
+- **Video audio tracks** - Extracts and transcribes audio from video files
+- **Whisper models** - Multiple model sizes for speed/accuracy tradeoffs
+- **Timestamp information** - Preserves timing data in transcription
+- **Speaker diarization** - Optional speaker identification (model-dependent)
+- **Language detection** - Automatic language identification
+- **Multi-language support** - Supports 90+ languages
+
+## Supported Formats
+
+<CardGroup cols={2}>
+  <Card title="Audio formats">
+    - MP3 (.mp3)
+    - WAV (.wav)
+    - FLAC (.flac)
+    - OGG (.ogg)
+    - M4A (.m4a)
+    - OPUS (.opus)
+  </Card>
+  
+  <Card title="Video formats (audio track)">
+    - MP4 (.mp4)
+    - WEBM (.webm)
+    - MKV (.mkv)
+    - AVI (.avi)
+  </Card>
+</CardGroup>
+
+## Usage
+
+### Basic Transcription
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("audio.mp3")
+
+doc = result.document
+
+# Access transcription
+for item, _ in doc.iterate_items():
+    if isinstance(item, TextItem):
+        print(item.text)
+```
+
+### With Pipeline Options
+
+```python
+from docling.document_converter import DocumentConverter, AudioFormatOption
+from docling.datamodel.pipeline_options import AsrPipelineOptions
+from docling.datamodel import asr_model_specs
+
+pipeline_options = AsrPipelineOptions(
+    asr_options=asr_model_specs.WHISPER_BASE  # Use base model
+)
+
+converter = DocumentConverter(
+    format_options={
+        AudioFormatOption: AudioFormatOption(
+            pipeline_options=pipeline_options
+        )
+    }
+)
+
+result = converter.convert("meeting_recording.wav")
+```
+
+## AsrPipelineOptions
+
+Configuration options for the Automatic Speech Recognition pipeline.
+
+### Parameters
+
+<ParamField path="asr_options" type="InlineAsrOptions" default="asr_model_specs.WHISPER_TINY">
+  Automatic Speech Recognition (ASR) model configuration for audio transcription.
+  
+  Specifies which ASR model to use (e.g., Whisper variants) and model-specific parameters for speech-to-text conversion.
+</ParamField>
+
+Inherits all parameters from [PipelineOptions](/api/options/pipeline-options#pipelineoptions):
+- `document_timeout`
+- `accelerator_options`
+- `enable_remote_services`
+- `allow_external_plugins`
+- `artifacts_path`
+
+## Available Whisper Models
+
+Docling provides pre-configured Whisper model options:
+
+```python
+from docling.datamodel import asr_model_specs
+
+# Available models (smallest to largest)
+WHISPER_TINY = asr_model_specs.WHISPER_TINY      # Fastest, ~1GB VRAM
+WHISPER_BASE = asr_model_specs.WHISPER_BASE      # Balanced
+WHISPER_SMALL = asr_model_specs.WHISPER_SMALL    # Good accuracy
+WHISPER_MEDIUM = asr_model_specs.WHISPER_MEDIUM  # High accuracy
+WHISPER_LARGE = asr_model_specs.WHISPER_LARGE    # Best accuracy, ~10GB VRAM
+```
+
+### Model Selection Guide
+
+<AccordionGroup>
+  <Accordion title="WHISPER_TINY">
+    **Best for:**
+    - Quick drafts or previews
+    - Resource-constrained environments
+    - Real-time transcription
+    - Simple audio with clear speech
+    
+    **Characteristics:**
+    - Size: ~75M parameters
+    - Speed: Very fast
+    - Accuracy: Basic
+    - VRAM: ~1GB
+  </Accordion>
+  
+  <Accordion title="WHISPER_BASE">
+    **Best for:**
+    - General-purpose transcription
+    - Meetings and interviews
+    - Balanced speed and accuracy
+    
+    **Characteristics:**
+    - Size: ~140M parameters
+    - Speed: Fast
+    - Accuracy: Good
+    - VRAM: ~1-2GB
+  </Accordion>
+  
+  <Accordion title="WHISPER_SMALL">
+    **Best for:**
+    - Production transcription
+    - Podcasts and lectures
+    - Better accuracy needed
+    
+    **Characteristics:**
+    - Size: ~240M parameters
+    - Speed: Medium
+    - Accuracy: Very good
+    - VRAM: ~2GB
+  </Accordion>
+  
+  <Accordion title="WHISPER_MEDIUM">
+    **Best for:**
+    - Professional transcription
+    - Complex audio environments
+    - Multiple speakers
+    
+    **Characteristics:**
+    - Size: ~760M parameters
+    - Speed: Slow
+    - Accuracy: Excellent
+    - VRAM: ~5GB
+  </Accordion>
+  
+  <Accordion title="WHISPER_LARGE">
+    **Best for:**
+    - Maximum accuracy requirements
+    - Difficult audio conditions
+    - Multi-lingual content
+    - Publication-quality transcripts
+    
+    **Characteristics:**
+    - Size: ~1.5B parameters
+    - Speed: Very slow
+    - Accuracy: Best
+    - VRAM: ~10GB
+  </Accordion>
+</AccordionGroup>
+
+## Language Support
+
+Whisper supports 90+ languages with automatic detection:
+
+```python
+# Automatic language detection (default)
+pipeline_options = AsrPipelineOptions(
+    asr_options=asr_model_specs.WHISPER_BASE
+)
+
+# Or specify language explicitly
+# Language codes: en, es, fr, de, it, pt, nl, pl, ru, zh, ja, ko, etc.
+```
+
+## GPU Acceleration
+
+Enable GPU for faster transcription:
+
+```python
+from docling.datamodel.pipeline_options import AsrPipelineOptions
+from docling.datamodel.accelerator_options import AcceleratorOptions
+
+pipeline_options = AsrPipelineOptions(
+    asr_options=asr_model_specs.WHISPER_BASE,
+    accelerator_options=AcceleratorOptions(
+        device="cuda",  # or "mps" for Apple Silicon
+        num_threads=4
+    )
+)
+```
+
+See [AcceleratorOptions](/api/options/accelerator-options) for details.
+
+## Output Structure
+
+Transcription appears as text items in the document:
+
+```python
+result = converter.convert("audio.mp3")
+
+for item, _ in result.document.iterate_items():
+    if isinstance(item, TextItem):
+        print(f"Transcription: {item.text}")
+        
+        # Provenance may include timing information
+        if item.prov:
+            for prov in item.prov:
+                print(f"  Timestamp: {prov.charspan}")
+```
+
+## Advanced Usage
+
+### Batch Audio Processing
+
+```python
+import concurrent.futures
+from pathlib import Path
+
+def transcribe_audio(audio_file):
+    converter = DocumentConverter(
+        format_options={
+            AudioFormatOption: AudioFormatOption(
+                pipeline_options=AsrPipelineOptions(
+                    asr_options=asr_model_specs.WHISPER_BASE
+                )
+            )
+        }
+    )
+    return converter.convert(audio_file)
+
+# Process multiple audio files
+audio_files = list(Path("recordings/").glob("*.mp3"))
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+    results = list(executor.map(transcribe_audio, audio_files))
+```
+
+### Extract from Video
+
+```python
+# Video files automatically extract audio track
+converter = DocumentConverter()
+result = converter.convert("meeting.mp4")
+
+# Transcription from video audio
+print(result.document.export_to_text())
+```
+
+### Long Audio Files
+
+```python
+# For very long audio, use timeout protection
+pipeline_options = AsrPipelineOptions(
+    document_timeout=600.0,  # 10 minutes timeout
+    asr_options=asr_model_specs.WHISPER_SMALL
+)
+```
+
+## Performance Optimization
+
+<AccordionGroup>
+  <Accordion title="Model Selection">
+    Choose model based on requirements:
+    
+    | Use Case | Model | Speed | Accuracy |
+    |----------|-------|-------|----------|
+    | Draft/Preview | TINY | ⚡⚡⚡⚡ | ⭐⭐ |
+    | General | BASE | ⚡⚡⚡ | ⭐⭐⭐ |
+    | Production | SMALL | ⚡⚡ | ⭐⭐⭐⭐ |
+    | Professional | MEDIUM | ⚡ | ⭐⭐⭐⭐⭐ |
+    | Maximum Quality | LARGE | 🐌 | ⭐⭐⭐⭐⭐⭐ |
+  </Accordion>
+  
+  <Accordion title="GPU Acceleration">
+    Enable GPU for significant speedup:
+    
+    ```python
+    accelerator_options = AcceleratorOptions(
+        device="cuda",  # 5-10x faster than CPU
+    )
+    ```
+    
+    **Requirements:**
+    - NVIDIA GPU with CUDA support
+    - Or Apple Silicon with MPS support
+  </Accordion>
+  
+  <Accordion title="Memory Management">
+    Larger models require more VRAM:
+    
+    - **TINY/BASE**: 1-2GB VRAM
+    - **SMALL**: 2-3GB VRAM
+    - **MEDIUM**: 5-6GB VRAM
+    - **LARGE**: 10GB+ VRAM
+    
+    **For limited memory:**
+    - Use smaller model
+    - Process on CPU (slower)
+    - Chunk long audio files
+  </Accordion>
+</AccordionGroup>
+
+## Limitations
+
+<Warning>
+  **Known Limitations:**
+  
+  - **Processing time**: Real-time factor varies by model (1x to 10x+ audio duration)
+  - **Accuracy**: Depends on audio quality, accents, background noise
+  - **Speaker diarization**: Limited speaker identification
+  - **Punctuation**: May lack proper punctuation in some cases
+  - **Timestamps**: Segment-level only, not word-level
+  - **Music/Sound effects**: Not transcribed (speech only)
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Poor transcription quality">
+    **Solutions:**
+    1. Use larger model (MEDIUM or LARGE)
+    2. Ensure audio is clear (reduce background noise)
+    3. Check correct language is detected
+    4. Verify audio format is supported
+    
+    ```python
+    # Use larger model for better accuracy
+    pipeline = AsrPipelineOptions(
+        asr_options=asr_model_specs.WHISPER_LARGE
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Out of memory">
+    **Solutions:**
+    - Use smaller model (TINY or BASE)
+    - Process on CPU instead of GPU
+    - Split long audio into chunks
+    
+    ```python
+    # Use CPU for large files
+    pipeline = AsrPipelineOptions(
+        asr_options=asr_model_specs.WHISPER_TINY,
+        accelerator_options=AcceleratorOptions(device="cpu")
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Slow processing">
+    **Optimizations:**
+    - Enable GPU acceleration
+    - Use smaller model
+    - Process shorter segments
+    - Use WHISPER_TINY for drafts
+  </Accordion>
+  
+  <Accordion title="Unsupported format">
+    **Solution**: Convert audio to supported format (WAV, MP3, FLAC)
+    
+    ```bash
+    # Using ffmpeg
+    ffmpeg -i input.aac -ar 16000 output.wav
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+1. **Audio quality**: Use high-quality recordings (16kHz+ sample rate)
+2. **Model selection**: Start with SMALL, adjust based on results
+3. **GPU usage**: Enable GPU for faster processing
+4. **Batch processing**: Process multiple files in parallel
+5. **Timeout protection**: Set `document_timeout` for long files
+6. **Format conversion**: Convert to WAV for best compatibility
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Meeting Transcription">
+    Convert recorded meetings to searchable text
+  </Card>
+  
+  <Card title="Interview Processing">
+    Transcribe interviews for qualitative research
+  </Card>
+  
+  <Card title="Podcast/Lecture">
+    Create text versions of audio content
+  </Card>
+  
+  <Card title="Voice Notes">
+    Convert voice memos to text
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Backends Overview](/api/backends/overview) - Backend architecture
+- [Pipeline Options](/api/options/pipeline-options#asrpipelineoptions) - ASR configuration
+- [AcceleratorOptions](/api/options/accelerator-options) - GPU acceleration
+- [DocumentConverter](/api/document-converter) - Main conversion API

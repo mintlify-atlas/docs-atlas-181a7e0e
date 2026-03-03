@@ -1,0 +1,367 @@
+---
+title: PPTX Backend
+description: Microsoft PowerPoint presentation parsing and conversion
+---
+
+## Overview
+
+The PPTX backend (`MsPowerpointDocumentBackend`) parses Microsoft PowerPoint presentations (.pptx files) and converts them directly to `DoclingDocument` format. Each slide becomes a page with extracted content including text, tables, and images.
+
+## Features
+
+- **Slide-by-page conversion** - Each slide becomes a document page
+- **Text extraction** - Titles, subtitles, body text, and notes
+- **List detection** - Bullet points and numbered lists with hierarchy
+- **Table extraction** - Tables with cell spans and structure
+- **Image extraction** - Embedded pictures and shapes
+- **Notes preservation** - Speaker notes as furniture content
+- **Grouped shapes** - Handles grouped shape content
+- **Placeholder detection** - Identifies title, subtitle, and body placeholders
+
+## Usage
+
+### Basic Conversion
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("presentation.pptx")
+
+# Access converted document
+doc = result.document
+print(f"Slides: {len(doc.pages)}")
+
+for page in doc.pages:
+    print(f"\nSlide {page.page_no}:")
+    # Iterate items on this slide
+    for item, _ in doc.iterate_items(page_no=page.page_no):
+        print(f"  {item.label}: {getattr(item, 'text', '')}")
+```
+
+### With Format Options
+
+```python
+from docling.document_converter import DocumentConverter, PptxFormatOption
+
+converter = DocumentConverter(
+    format_options={
+        PptxFormatOption: PptxFormatOption(
+            # PPTX backend has no specific options currently
+        )
+    }
+)
+
+result = converter.convert("presentation.pptx")
+```
+
+## Slide Structure
+
+Each slide is organized as a chapter group:
+
+```python
+from docling_core.types.doc import GroupLabel
+
+for group, _ in doc.iterate_items():
+    if isinstance(group, GroupItem) and group.label == GroupLabel.CHAPTER:
+        print(f"Slide: {group.name}")
+        # All slide content is nested under this group
+```
+
+## Supported Elements
+
+### Text Content
+
+<AccordionGroup>
+  <Accordion title="Titles and Subtitles">
+    Slide titles and subtitles are automatically detected based on placeholder types:
+    
+    ```python
+    from docling_core.types.doc import DocItemLabel
+    
+    for item, _ in doc.iterate_items():
+        if item.label == DocItemLabel.TITLE:
+            print(f"Title: {item.text}")
+        elif item.label == DocItemLabel.SECTION_HEADER:
+            print(f"Subtitle: {item.text}")
+    ```
+  </Accordion>
+  
+  <Accordion title="Body Text">
+    Regular text content from slide bodies:
+    
+    ```python
+    for item, _ in doc.iterate_items():
+        if item.label == DocItemLabel.PARAGRAPH:
+            print(f"Text: {item.text}")
+    ```
+  </Accordion>
+  
+  <Accordion title="Speaker Notes">
+    Speaker notes are extracted as furniture-layer content:
+    
+    ```python
+    from docling_core.types.doc.document import ContentLayer
+    
+    for item, _ in doc.iterate_items():
+        if item.content_layer == ContentLayer.FURNITURE:
+            print(f"Note: {item.text}")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Lists
+
+PowerPoint lists are detected and preserved:
+
+- **Bullet lists** - Unordered list items with bullet markers
+- **Numbered lists** - Ordered lists with automatic numbering
+- **Multi-level lists** - Nested list hierarchies based on indentation
+
+```python
+from docling_core.types.doc import ListItem
+
+for item, _ in doc.iterate_items():
+    if isinstance(item, ListItem):
+        indent = "  " * item.level
+        print(f"{indent}{item.marker} {item.text}")
+```
+
+### List Detection Algorithm
+
+The backend uses PowerPoint's paragraph properties to determine list items:
+
+1. Checks direct paragraph properties (`<a:pPr>`)
+2. Falls back to shape-level list styles (`<a:lstStyle>`)
+3. Checks layout placeholder styles
+4. Uses slide master text styles
+
+**Bullet markers:**
+- `<a:buChar>` - Character bullets (•, ○, ■, etc.)
+- `<a:buAutoNum>` - Automatic numbering
+- `<a:buBlip>` - Picture bullets
+- `<a:buNone>` - Explicitly no bullet
+
+### Tables
+
+Complete table extraction with structure:
+
+```python
+for table, _ in doc.iterate_items():
+    if isinstance(table, TableItem):
+        print(f"Table: {table.data.num_rows} x {table.data.num_cols}")
+        
+        for cell in table.data.table_cells:
+            print(f"  ({cell.start_row_offset_idx},{cell.start_col_offset_idx}): {cell.text}")
+            print(f"    Span: {cell.row_span}x{cell.col_span}")
+            print(f"    Header: col={cell.column_header}, row={cell.row_header}")
+```
+
+**Features:**
+- Cell content and formatting
+- Merged cells (rowSpan, gridSpan)
+- Header row/column detection
+- Empty cell handling
+
+### Images
+
+Extracts embedded pictures:
+
+```python
+for item, _ in doc.iterate_items():
+    if isinstance(item, PictureItem):
+        print(f"Image found on slide {item.prov[0].page_no}")
+        
+        # Access image data
+        img = item.image.pil_image
+        img.save(f"slide_image_{item.self_ref}.png")
+```
+
+**Supported:**
+- Inline pictures
+- Picture shapes
+- Image formats: JPEG, PNG, BMP, etc.
+- DPI information preserved
+
+## Slide Layout
+
+Slide dimensions and layout information:
+
+```python
+for page in doc.pages:
+    print(f"Slide {page.page_no}:")
+    print(f"  Size: {page.size.width} x {page.size.height}")
+    # Size in EMU (English Metric Units) by default
+```
+
+## Provenance Information
+
+All extracted items include provenance with position on slide:
+
+```python
+for item, _ in doc.iterate_items():
+    if item.prov:
+        prov = item.prov[0]
+        print(f"Item on slide {prov.page_no}:")
+        print(f"  BBox: {prov.bbox}")
+        print(f"  Text: {getattr(item, 'text', '')}")
+```
+
+Bounding boxes use slide dimensions as coordinate system.
+
+## Grouped Shapes
+
+Handles PowerPoint shape groups:
+
+```python
+# Grouped shapes are automatically processed recursively
+# Content from all shapes in a group is extracted
+```
+
+The backend recursively processes:
+- Shape groups
+- Nested groups
+- Individual shapes within groups
+
+## Advanced Features
+
+### Placeholder Types
+
+Automatic detection of PowerPoint placeholders:
+
+- `PP_PLACEHOLDER.TITLE` - Slide title
+- `PP_PLACEHOLDER.CENTER_TITLE` - Centered title
+- `PP_PLACEHOLDER.SUBTITLE` - Subtitle
+- `PP_PLACEHOLDER.BODY` - Content placeholder
+- `PP_PLACEHOLDER.OBJECT` - Object placeholder
+
+### Line Breaks
+
+Line breaks in PowerPoint text are converted to spaces for better text flow:
+
+```python
+# PowerPoint: "Line 1\nLine 2"
+# Extracted: "Line 1 Line 2"
+```
+
+### Empty Slides
+
+Slides without content still create page entries:
+
+```python
+for page in doc.pages:
+    # Every slide creates a page, even if empty
+    print(f"Slide {page.page_no} exists")
+```
+
+## Performance
+
+- **Speed**: Fast declarative conversion (no ML models)
+- **Memory**: Low memory footprint
+- **Concurrency**: Thread-safe per document instance
+
+```python
+import concurrent.futures
+
+def convert_pptx(file_path):
+    converter = DocumentConverter()
+    return converter.convert(file_path)
+
+# Process multiple presentations in parallel
+files = ["pres1.pptx", "pres2.pptx", "pres3.pptx"]
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    results = list(executor.map(convert_pptx, files))
+```
+
+## Limitations
+
+<Warning>
+  **Known Limitations:**
+  
+  - **Animations**: Animation sequences not preserved
+  - **Transitions**: Slide transitions not captured
+  - **Embedded Media**: Videos and audio not extracted
+  - **Charts**: Chart data not extracted (renders as image)
+  - **SmartArt**: SmartArt graphics may not render correctly
+  - **Master Slides**: Template information not fully preserved
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Missing bullet points">
+    **Cause**: Complex list style inheritance
+    
+    **Check**: Verify list formatting in PowerPoint source
+    
+    **Note**: Backend checks multiple levels of style inheritance
+  </Accordion>
+  
+  <Accordion title="Incorrect list numbering">
+    **Cause**: Custom start numbers or broken numbering
+    
+    **Solution**: Backend respects `start` attribute on ordered lists
+  </Accordion>
+  
+  <Accordion title="Missing notes">
+    **Check**: Verify slides have speaker notes in PowerPoint
+    
+    ```python
+    # Notes appear as FURNITURE content layer
+    for item, _ in doc.iterate_items():
+        if item.content_layer == ContentLayer.FURNITURE:
+            print(f"Note: {item.text}")
+    ```
+  </Accordion>
+  
+  <Accordion title="Image quality issues">
+    **Note**: Images are extracted at original embedded resolution
+    
+    **Workaround**: Use higher resolution images in source presentation
+  </Accordion>
+</AccordionGroup>
+
+## Export Formats
+
+After conversion, export to various formats:
+
+```python
+result = converter.convert("presentation.pptx")
+doc = result.document
+
+# Export to Markdown (slide-by-slide)
+markdown = doc.export_to_markdown()
+
+# Export to JSON
+json_doc = doc.model_dump_json()
+
+# Export to plain text
+text = doc.export_to_text()
+```
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Content Extraction">
+    Extract text and tables from presentations for analysis or archival
+  </Card>
+  
+  <Card title="Slide Summarization">
+    Convert presentations to text format for LLM processing and summarization
+  </Card>
+  
+  <Card title="Training Materials">
+    Extract course content from educational presentations
+  </Card>
+  
+  <Card title="Documentation">
+    Convert technical presentations to structured documentation
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Backends Overview](/api/backends/overview) - Backend architecture
+- [DOCX Backend](/api/backends/docx) - Word document processing
+- [XLSX Backend](/api/backends/xlsx) - Excel processing
+- [DocumentConverter](/api/document-converter) - Main conversion API

@@ -1,0 +1,501 @@
+---
+title: HTML Backend
+description: HTML document parsing and web content extraction
+---
+
+## Overview
+
+The HTML backend (`HTMLDocumentBackend`) parses HTML documents and web pages, converting them directly to `DoclingDocument` format. It preserves document structure, formatting, and handles complex HTML layouts including tables, lists, and embedded images.
+
+## Features
+
+- **Semantic structure preservation** - Headings, paragraphs, lists, tables
+- **Rich formatting support** - Bold, italic, underline, strikethrough, code
+- **Hyperlink preservation** - Internal and external links
+- **Table extraction** - Complex tables with merged cells and rich content
+- **Image handling** - Embedded images with remote/local fetching
+- **List hierarchy** - Nested lists with proper indentation
+- **Code blocks** - Monospace code and pre-formatted text
+- **Furniture detection** - Automatic header/footer/title handling
+
+## Usage
+
+### Basic Conversion
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("page.html")
+
+doc = result.document
+print(doc.export_to_markdown())
+```
+
+### With Backend Options
+
+```python
+from docling.document_converter import DocumentConverter, HtmlFormatOption
+from docling.datamodel.backend_options import HTMLBackendOptions
+from pathlib import Path
+
+backend_options = HTMLBackendOptions(
+    fetch_images=True,
+    source_uri=Path("index.html"),
+    add_title=True,
+    infer_furniture=True
+)
+
+converter = DocumentConverter(
+    format_options={
+        HtmlFormatOption: HtmlFormatOption(
+            backend_options=backend_options
+        )
+    }
+)
+
+result = converter.convert("page.html")
+```
+
+## HTMLBackendOptions
+
+Configuration options for HTML parsing.
+
+### Parameters
+
+<ParamField path="kind" type="Literal['html']" default="'html'">
+  Backend type identifier. Always set to `"html"` for HTML backends.
+</ParamField>
+
+<ParamField path="fetch_images" type="bool" default="False">
+  Whether the backend should access remote or local resources to parse images in an HTML document.
+  
+  **Enable when:**
+  - You want to include embedded images
+  - Processing web pages with external images
+  - Images are needed for final output
+  
+  ```python
+  options = HTMLBackendOptions(fetch_images=True)
+  ```
+</ParamField>
+
+<ParamField path="source_uri" type="AnyUrl | PurePath | None" default="None">
+  The URI that originates the HTML document. If provided, the backend will use it to resolve relative paths in the HTML document.
+  
+  **Required for:**
+  - Resolving relative image paths
+  - Resolving relative hyperlinks
+  - Remote resource fetching
+  
+  ```python
+  # For local files
+  options = HTMLBackendOptions(
+      source_uri=Path("/path/to/index.html")
+  )
+  
+  # For web pages
+  from pydantic import AnyUrl
+  options = HTMLBackendOptions(
+      source_uri=AnyUrl("https://example.com/page.html")
+  )
+  ```
+</ParamField>
+
+<ParamField path="add_title" type="bool" default="True">
+  Add the HTML `<title>` tag as furniture in the DoclingDocument.
+  
+  The title is added as furniture-layer content (metadata).
+</ParamField>
+
+<ParamField path="infer_furniture" type="bool" default="True">
+  Infer all the content before the first header as furniture.
+  
+  **Automatically marks as furniture:**
+  - Content before first `<h1>`-`<h6>`
+  - Headers and footers
+  - Navigation elements (when detected)
+</ParamField>
+
+<ParamField path="enable_remote_fetch" type="bool" default="False">
+  Enable fetching of remote resources referenced in the HTML.
+</ParamField>
+
+<ParamField path="enable_local_fetch" type="bool" default="False">
+  Enable fetching of local resources referenced in the HTML.
+</ParamField>
+
+## Supported Elements
+
+### Headings
+
+<Accordion title="H1-H6 Hierarchy">
+  HTML headings map to document structure:
+  
+  - `<h1>` → Title or top-level heading (Level 0)
+  - `<h2>`-`<h6>` → Headings Level 1-5
+  
+  ```python
+  for item, _ in doc.iterate_items():
+      if isinstance(item, HeadingItem):
+          print(f"H{item.level + 1}: {item.text}")
+  ```
+  
+  **Automatic hierarchy:**
+  - Skipped levels create invisible section groups
+  - Maintains proper nesting even with irregular markup
+</Accordion>
+
+### Text and Formatting
+
+<AccordionGroup>
+  <Accordion title="Inline Formatting">
+    Supported HTML tags:
+    - `<b>`, `<strong>` → **Bold**
+    - `<i>`, `<em>`, `<var>` → *Italic*
+    - `<u>`, `<ins>` → Underline
+    - `<s>`, `<del>` → ~~Strikethrough~~
+    - `<sub>` → Subscript
+    - `<sup>` → Superscript
+    - `<code>`, `<kbd>`, `<samp>` → Code formatting
+    
+    ```python
+    for item, _ in doc.iterate_items():
+        if isinstance(item, TextItem) and item.formatting:
+            print(f"{item.text}:")
+            print(f"  Bold: {item.formatting.bold}")
+            print(f"  Italic: {item.formatting.italic}")
+    ```
+  </Accordion>
+  
+  <Accordion title="Hyperlinks">
+    `<a href="...">` tags preserve links:
+    
+    ```python
+    for item, _ in doc.iterate_items():
+        if isinstance(item, TextItem) and item.hyperlink:
+            print(f"Link: {item.text} → {item.hyperlink}")
+    ```
+    
+    **Features:**
+    - Relative URL resolution (requires `source_uri`)
+    - Protocol-relative URLs (`//example.com`)
+    - Fragment identifiers (`#section`)
+  </Accordion>
+  
+  <Accordion title="Code Blocks">
+    `<pre>` and `<code>` elements:
+    
+    ```python
+    for item, _ in doc.iterate_items():
+        if isinstance(item, CodeItem):
+            print(f"Code: {item.text}")
+    ```
+    
+    **Handling:**
+    - `<pre>` → Preserved formatting and whitespace
+    - `<code>` → Inline code or code blocks
+    - Nested formatting preserved
+  </Accordion>
+</AccordionGroup>
+
+### Lists
+
+Complete list structure preservation:
+
+```html
+<ul>
+  <li>Item 1
+    <ul>
+      <li>Nested item</li>
+    </ul>
+  </li>
+  <li>Item 2</li>
+</ul>
+
+<ol start="5">
+  <li>Numbered item 5</li>
+  <li>Numbered item 6</li>
+</ol>
+```
+
+```python
+for item, _ in doc.iterate_items():
+    if isinstance(item, ListItem):
+        indent = "  " * item.level
+        marker = item.marker if item.enumerated else "•"
+        print(f"{indent}{marker} {item.text}")
+```
+
+**Features:**
+- Ordered (`<ol>`) and unordered (`<ul>`) lists
+- Custom start numbers (`<ol start="5">`)
+- Nested lists with proper hierarchy
+- Inline formatting in list items
+
+### Tables
+
+Advanced table extraction with rich content:
+
+```python
+for table, _ in doc.iterate_items():
+    if isinstance(table, TableItem):
+        print(f"Table: {table.data.num_rows} x {table.data.num_cols}")
+        
+        for cell in table.data.table_cells:
+            if isinstance(cell, RichTableCell):
+                print(f"Rich cell: {cell.text}")
+                # Cell contains nested items (text, images, etc.)
+            else:
+                print(f"Simple cell: {cell.text}")
+```
+
+**Supported:**
+- Row and column headers (`<th>`)
+- Merged cells (`rowspan`, `colspan`)
+- Rich cell content (formatted text, images, nested elements)
+- Simple cells (plain text)
+- Header detection (`<thead>`, first row)
+
+### Rich Table Cells
+
+Cells with complex content become `RichTableCell`:
+
+```html
+<table>
+  <tr>
+    <td>
+      <strong>Bold text</strong>
+      <img src="icon.png" />
+      <a href="link.html">Link</a>
+    </td>
+  </tr>
+</table>
+```
+
+The cell content is parsed recursively and grouped:
+
+```python
+for table, _ in doc.iterate_items():
+    if isinstance(table, TableItem):
+        for cell in table.data.table_cells:
+            if isinstance(cell, RichTableCell) and cell.ref:
+                # Access cell's nested items
+                group = cell.ref.resolve(doc)
+                for child_ref in group.children:
+                    item = child_ref.resolve(doc)
+                    print(f"  Cell contains: {item.label}")
+```
+
+### Images
+
+Image handling with remote/local fetching:
+
+```python
+for item, _ in doc.iterate_items():
+    if isinstance(item, PictureItem):
+        print(f"Image: {item.caption}")
+        
+        if item.image:
+            img = item.image.pil_image
+            img.save(f"extracted_{item.self_ref}.png")
+```
+
+**Supported:**
+- `<img>` tags
+- `<figure>` with `<figcaption>`
+- Alt text as caption fallback
+- Remote images (with `fetch_images=True`)
+- Local images (with `source_uri` and path resolution)
+- Base64 data URLs (`data:image/png;base64,...`)
+
+## Content Layers
+
+Automatic content layer detection:
+
+```python
+from docling_core.types.doc.document import ContentLayer
+
+for item, _ in doc.iterate_items():
+    if item.content_layer == ContentLayer.FURNITURE:
+        print(f"Furniture: {item.text}")
+    elif item.content_layer == ContentLayer.BODY:
+        print(f"Body: {item.text}")
+```
+
+**Furniture (metadata):**
+- HTML `<title>` element
+- Content before first heading (if `infer_furniture=True`)
+- `<footer>` elements
+
+**Body (main content):**
+- All content after first heading
+- Explicit body content
+
+## HTML Cleanup
+
+Automatic cleanup and normalization:
+
+<Steps>
+  <Step title="Remove unwanted elements">
+    - `<script>` and `<noscript>` tags
+    - `<style>` tags
+    - Hidden elements (`hidden` attribute)
+  </Step>
+  
+  <Step title="Fix invalid structure">
+    - Block elements inside `<p>` tags
+    - Nested paragraph correction
+    - Proper flow content handling
+  </Step>
+  
+  <Step title="Normalize whitespace">
+    - `<br>` tags → newlines
+    - Multiple spaces collapsed
+    - Line breaks preserved in `<pre>`
+  </Step>
+</Steps>
+
+## URL Resolution
+
+When `source_uri` is provided:
+
+```python
+options = HTMLBackendOptions(
+    source_uri=AnyUrl("https://example.com/docs/page.html"),
+    fetch_images=True
+)
+```
+
+**Resolves:**
+- Relative paths: `../images/pic.png` → `https://example.com/images/pic.png`
+- Absolute paths: `/static/img.png` → `https://example.com/static/img.png`
+- Protocol-relative: `//cdn.example.com/img.png` → `https://cdn.example.com/img.png`
+
+## Advanced Features
+
+### Special Blocks
+
+<Accordion title="Details and Summary">
+  `<details>` and `<summary>` elements:
+  
+  ```html
+  <details>
+    <summary>Click to expand</summary>
+    Hidden content here
+  </details>
+  ```
+  
+  Creates section groups with summary as heading.
+</Accordion>
+
+<Accordion title="Addresses">
+  `<address>` elements converted to text items.
+</Accordion>
+
+<Accordion title="Figures">
+  `<figure>` with `<figcaption>` properly linked:
+  
+  ```html
+  <figure>
+    <img src="chart.png" alt="Chart" />
+    <figcaption>Figure 1: Sales Data</figcaption>
+  </figure>
+  ```
+  
+  Caption becomes `CAPTION` label item.
+</Accordion>
+
+## Performance
+
+- **Speed**: Fast declarative parsing
+- **Memory**: Low to moderate (depends on HTML size)
+- **Remote fetching**: Can slow down if many images
+
+```python
+# Process multiple HTML files
+import concurrent.futures
+
+def convert_html(file_path):
+    converter = DocumentConverter()
+    return converter.convert(file_path)
+
+files = ["page1.html", "page2.html", "page3.html"]
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    results = list(executor.map(convert_html, files))
+```
+
+## Limitations
+
+<Warning>
+  **Known Limitations:**
+  
+  - **JavaScript**: Dynamic content not executed
+  - **CSS**: Styling not parsed (except inline semantic tags)
+  - **SVG**: SVG graphics may not render
+  - **Forms**: Form elements structure not preserved
+  - **iframes**: Embedded frames not processed
+  - **Canvas**: Canvas content not extracted
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Missing images">
+    **Solution**: Enable image fetching and set source URI
+    ```python
+    options = HTMLBackendOptions(
+        fetch_images=True,
+        source_uri=Path("index.html")
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Broken relative links">
+    **Cause**: Missing `source_uri`
+    
+    **Solution**: Provide source URI for resolution
+  </Accordion>
+  
+  <Accordion title="Incorrect structure">
+    **Possible causes:**
+    - Invalid HTML markup
+    - Missing closing tags
+    - Block elements in inline context
+    
+    **Note**: Backend attempts to fix common issues
+  </Accordion>
+  
+  <Accordion title="Too much furniture content">
+    **Solution**: Disable furniture inference
+    ```python
+    options = HTMLBackendOptions(infer_furniture=False)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Documentation Sites">
+    Convert HTML documentation to structured format
+  </Card>
+  
+  <Card title="Web Archival">
+    Preserve web page content in structured format
+  </Card>
+  
+  <Card title="Content Migration">
+    Extract content from HTML for migration to other systems
+  </Card>
+  
+  <Card title="Web Scraping">
+    Structure web content for analysis or indexing
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Backends Overview](/api/backends/overview) - Backend architecture
+- [Export Formats](/guides/export-formats) - Export to Markdown and other formats
+- [DocumentConverter](/api/document-converter) - Main conversion API

@@ -1,0 +1,315 @@
+---
+title: Basic Document Conversion
+description: Learn the fundamentals of converting documents with Docling, from single files to batch processing
+---
+
+## Overview
+
+Docling makes document conversion straightforward with a simple, unified API. Whether you're converting a single file or processing hundreds of documents, the workflow is the same:
+
+1. Create a `DocumentConverter` instance
+2. Call `convert()` or `convert_all()` with your source(s)
+3. Access the resulting `DoclingDocument` from the `ConversionResult`
+
+## Single Document Conversion
+
+The simplest way to convert a document:
+
+<CodeGroup>
+```python From URL
+from docling.document_converter import DocumentConverter
+
+source = "https://arxiv.org/pdf/2408.09869"
+converter = DocumentConverter()
+result = converter.convert(source)
+doc = result.document
+
+print(doc.export_to_markdown())
+```
+
+```python From Local File
+from pathlib import Path
+from docling.document_converter import DocumentConverter
+
+source = Path("/path/to/document.pdf")
+converter = DocumentConverter()
+result = converter.convert(source)
+doc = result.document
+
+print(doc.export_to_markdown())
+```
+
+```python From Binary Stream
+from io import BytesIO
+from docling.datamodel.base_models import DocumentStream
+from docling.document_converter import DocumentConverter
+
+# Read binary data from somewhere (file, network, database, etc.)
+binary_data = open("/path/to/document.pdf", "rb").read()
+
+buf = BytesIO(binary_data)
+source = DocumentStream(name="my_doc.pdf", stream=buf)
+
+converter = DocumentConverter()
+result = converter.convert(source)
+doc = result.document
+```
+
+```python From String (HTML/Markdown)
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter
+
+html_content = "<h1>Hello World</h1><p>This is HTML content.</p>"
+
+converter = DocumentConverter()
+result = converter.convert_string(
+    content=html_content,
+    format=InputFormat.HTML,
+    name="my_document"  # Optional, auto-generated if not provided
+)
+doc = result.document
+```
+</CodeGroup>
+
+<Note>
+Docling automatically detects the document format based on file extension or content type. Supported formats include PDF, DOCX, PPTX, XLSX, HTML, Markdown, images, and more.
+</Note>
+
+## Understanding ConversionResult
+
+The `convert()` method returns a `ConversionResult` object containing:
+
+```python
+result = converter.convert(source)
+
+# The converted document
+doc = result.document
+
+# Conversion status (SUCCESS, FAILURE, PARTIAL_SUCCESS)
+print(result.status)
+
+# Input document metadata
+print(result.input.file.name)
+print(result.input.format)
+
+# Any errors encountered during conversion
+if result.errors:
+    for error in result.errors:
+        print(f"Error: {error.error_message}")
+```
+
+### Conversion Status
+
+<Steps>
+
+<Step title="SUCCESS">
+Document converted completely without errors. All content was extracted successfully.
+</Step>
+
+<Step title="PARTIAL_SUCCESS">
+Document converted with some non-critical errors. Most content was extracted, but some elements may be missing or incomplete.
+</Step>
+
+<Step title="FAILURE">
+Document conversion failed. The `errors` list contains details about what went wrong.
+</Step>
+
+<Step title="SKIPPED">
+Document was not processed (e.g., format not allowed, file size exceeded limits).
+</Step>
+
+</Steps>
+
+## Error Handling
+
+By default, Docling raises exceptions on conversion errors. You can control this behavior:
+
+<CodeGroup>
+```python Raise on Error (Default)
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+
+try:
+    result = converter.convert(source, raises_on_error=True)
+    doc = result.document
+except Exception as e:
+    print(f"Conversion failed: {e}")
+```
+
+```python Capture Errors
+from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import ConversionStatus
+
+converter = DocumentConverter()
+result = converter.convert(source, raises_on_error=False)
+
+if result.status == ConversionStatus.SUCCESS:
+    doc = result.document
+    print("Success!")
+else:
+    print(f"Failed with status: {result.status}")
+    for error in result.errors:
+        print(f"  - {error.error_message}")
+```
+</CodeGroup>
+
+## Processing Multiple Documents
+
+Use `convert_all()` to process multiple documents efficiently:
+
+```python
+from pathlib import Path
+from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import ConversionStatus
+
+sources = [
+    Path("document1.pdf"),
+    Path("document2.docx"),
+    "https://example.com/doc3.pdf",
+]
+
+converter = DocumentConverter()
+
+# Returns an iterator of ConversionResult objects
+for result in converter.convert_all(sources, raises_on_error=False):
+    if result.status == ConversionStatus.SUCCESS:
+        print(f"Converted: {result.input.file.name}")
+        # Process the document
+        doc = result.document
+    else:
+        print(f"Failed: {result.input.file.name}")
+```
+
+<Note>
+`convert_all()` returns an iterator, not a list. Results are yielded as documents are converted, allowing you to process large batches without loading everything into memory.
+</Note>
+
+## Document Limits
+
+Control which documents get processed by setting limits:
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+
+result = converter.convert(
+    source,
+    max_num_pages=100,           # Skip documents with more than 100 pages
+    max_file_size=20971520,      # Skip files larger than 20MB (in bytes)
+)
+```
+
+### Page Range Selection
+
+Convert only specific pages from a document:
+
+```python
+from docling.document_converter import DocumentConverter
+from docling.datamodel.settings import PageRange
+
+converter = DocumentConverter()
+
+# Convert pages 1-10
+result = converter.convert(
+    source,
+    page_range=PageRange(start=0, end=10)  # 0-indexed
+)
+
+# Convert from page 5 to end
+result = converter.convert(
+    source,
+    page_range=PageRange(start=4)  # end=None means to the end
+)
+```
+
+## Quick Export
+
+Once you have a `DoclingDocument`, export to various formats:
+
+<CodeGroup>
+```python Markdown
+# Export to Markdown string
+markdown = doc.export_to_markdown()
+print(markdown)
+
+# Save to file
+doc.save_as_markdown("output.md")
+```
+
+```python JSON
+import json
+
+# Export to dict (JSON-serializable)
+data = doc.export_to_dict()
+json_str = json.dumps(data, indent=2)
+
+# Save to file
+doc.save_as_json("output.json")
+```
+
+```python HTML
+# Export to HTML string
+html = doc.export_to_html()
+
+# Save to file with embedded images
+from docling_core.types.doc import ImageRefMode
+
+doc.save_as_html(
+    "output.html",
+    image_mode=ImageRefMode.EMBEDDED
+)
+```
+
+```python Plain Text
+# Export to plain text (Markdown without formatting)
+text = doc.export_to_markdown(strict_text=True)
+print(text)
+
+# Save to file
+doc.save_as_markdown("output.txt", strict_text=True)
+```
+</CodeGroup>
+
+<Note>
+For detailed information on export formats and options, see the [Export Formats](/guides/export-formats) guide.
+</Note>
+
+## Resource Control
+
+Limit CPU usage for document processing:
+
+```bash
+# Set number of CPU threads (default: 4)
+export OMP_NUM_THREADS=2
+python your_script.py
+```
+
+Or in your Python code:
+
+```python
+import os
+
+# Must be set before importing docling
+os.environ["OMP_NUM_THREADS"] = "2"
+
+from docling.document_converter import DocumentConverter
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Batch Processing" icon="layer-group" href="/guides/batch-processing">
+    Learn efficient batch processing techniques for large document collections
+  </Card>
+  <Card title="Advanced Options" icon="sliders" href="/guides/advanced-options">
+    Customize conversion behavior with pipeline options and format-specific settings
+  </Card>
+  <Card title="Export Formats" icon="file-export" href="/guides/export-formats">
+    Explore all available export formats and their options
+  </Card>
+  <Card title="PDF Processing" icon="file-pdf" href="/guides/pdf-processing">
+    Deep dive into PDF-specific features and options
+  </Card>
+</CardGroup>

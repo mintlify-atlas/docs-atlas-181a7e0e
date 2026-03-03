@@ -1,0 +1,165 @@
+---
+title: LangChain Integration
+description: Use Docling as an official LangChain document loader for high-fidelity document processing
+---
+
+Docling is available as an official [LangChain](https://python.langchain.com/) extension, providing seamless integration for loading and processing documents in your LangChain applications.
+
+## Overview
+
+The LangChain Docling integration allows you to:
+
+- Load documents with high-fidelity structural preservation
+- Extract tables, images, and complex layouts accurately
+- Convert documents to LangChain Document objects
+- Build RAG applications with superior document understanding
+
+## Installation
+
+```bash
+pip install langchain-docling
+```
+
+## Quick Start
+
+Here's a simple example of using Docling with LangChain:
+
+```python
+from langchain_docling import DoclingLoader
+
+# Load a document
+loader = DoclingLoader(file_path="document.pdf")
+documents = loader.load()
+
+# Use in your LangChain pipeline
+for doc in documents:
+    print(doc.page_content)
+    print(doc.metadata)
+```
+
+## Advanced Usage
+
+### Custom Conversion Options
+
+```python
+from langchain_docling import DoclingLoader
+from docling.document_converter import DocumentConverter
+from docling.datamodel.pipeline_options import PipelineOptions
+
+# Configure Docling options
+pipeline_options = PipelineOptions()
+pipeline_options.do_ocr = True
+pipeline_options.do_table_structure = True
+
+# Create loader with custom options
+loader = DoclingLoader(
+    file_path="document.pdf",
+    pipeline_options=pipeline_options
+)
+
+documents = loader.load()
+```
+
+### Building a RAG Pipeline
+
+```python
+from langchain_docling import DoclingLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
+
+# Load documents
+loader = DoclingLoader(file_path="document.pdf")
+documents = loader.load()
+
+# Split documents
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=200
+)
+splits = text_splitter.split_documents(documents)
+
+# Create vector store
+embeddings = OpenAIEmbeddings()
+vectorstore = FAISS.from_documents(splits, embeddings)
+
+# Query
+retriever = vectorstore.as_retriever()
+results = retriever.get_relevant_documents("What is the main topic?")
+```
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="High-Fidelity Parsing" icon="file-lines">
+    Preserves document structure including tables, lists, and headings
+  </Card>
+  <Card title="OCR Support" icon="eye">
+    Extract text from scanned documents and images
+  </Card>
+  <Card title="Table Extraction" icon="table">
+    Accurately parse complex table structures
+  </Card>
+  <Card title="Metadata Enrichment" icon="tags">
+    Includes document metadata like page numbers and structure
+  </Card>
+</CardGroup>
+
+## Supported Document Formats
+
+The LangChain Docling integration supports:
+
+- PDF documents
+- Microsoft Word (DOCX)
+- PowerPoint (PPTX)
+- HTML files
+- Images (with OCR)
+- And more
+
+## Integration Benefits
+
+<Steps>
+  <Step title="Official Integration">
+    Maintained as part of the LangChain ecosystem with full support
+  </Step>
+  <Step title="Easy to Use">
+    Simple API that follows LangChain conventions
+  </Step>
+  <Step title="Production Ready">
+    Battle-tested in real-world applications
+  </Step>
+  <Step title="Active Development">
+    Regular updates and improvements
+  </Step>
+</Steps>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book" href="https://python.langchain.com/docs/integrations/providers/docling/">
+    Official LangChain integration docs
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/docling-project/docling-langchain">
+    Source code and examples
+  </Card>
+  <Card title="Tutorial" icon="graduation-cap" href="https://python.langchain.com/docs/integrations/document_loaders/docling/">
+    Step-by-step guide
+  </Card>
+  <Card title="PyPI" icon="box" href="https://pypi.org/project/langchain-docling/">
+    Package repository
+  </Card>
+</CardGroup>
+
+## Example Notebooks
+
+For complete working examples, check out:
+
+- [RAG with LangChain and Docling](../examples/rag_langchain.ipynb) - End-to-end RAG application
+- [LangChain Documentation](https://python.langchain.com/docs/integrations/document_loaders/docling/) - Official tutorial
+
+## Next Steps
+
+- Explore the [LangChain documentation](https://python.langchain.com/docs/integrations/providers/docling/)
+- Check out [example notebooks](../examples/rag_langchain.ipynb)
+- Learn about [document conversion options](../usage/conversion)
+- Build your first [RAG application](../examples/overview)

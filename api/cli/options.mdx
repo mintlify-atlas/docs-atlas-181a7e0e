@@ -1,0 +1,600 @@
+---
+title: CLI Options Reference
+description: Complete reference for all Docling CLI options and flags
+---
+
+This page provides a comprehensive reference for all CLI options available in Docling.
+
+## Global Options
+
+These options are available for the main `docling convert` command.
+
+### Input/Output Options
+
+<ParamField path="source" type="argument" required>
+  PDF files to convert. Can be local file paths, directory paths, or URLs. Multiple sources can be specified.
+  
+  **Examples:**
+  - `docling convert document.pdf`
+  - `docling convert /path/to/docs/`
+  - `docling convert https://example.com/file.pdf`
+</ParamField>
+
+<ParamField path="--from" type="option">
+  Specify input formats to convert from.
+  
+  **Type:** Multiple values allowed  
+  **Default:** All formats  
+  **Available:** `pdf`, `image`, `docx`, `pptx`, `xlsx`, `html`, `md`, `latex`, `audio`, `mets_gbs`
+</ParamField>
+
+<ParamField path="--to" type="option">
+  Specify output formats.
+  
+  **Type:** Multiple values allowed  
+  **Default:** `markdown`  
+  **Available:** `json`, `yaml`, `html`, `html_split_page`, `markdown`, `text`, `doctags`, `vtt`
+  
+  **Example:**
+  ```bash
+  docling convert doc.pdf --to json --to markdown
+  ```
+</ParamField>
+
+<ParamField path="--output" type="option">
+  Output directory where results are saved.
+  
+  **Type:** Path  
+  **Default:** `.` (current directory)
+  
+  **Example:**
+  ```bash
+  docling convert doc.pdf --output ./results
+  ```
+</ParamField>
+
+<ParamField path="--headers" type="option">
+  Specify HTTP request headers used when fetching URL input sources.
+  
+  **Type:** JSON string  
+  
+  **Example:**
+  ```bash
+  docling convert https://api.example.com/doc.pdf \
+    --headers '{"Authorization": "Bearer token"}'
+  ```
+</ParamField>
+
+### Image Export Options
+
+<ParamField path="--image-export-mode" type="option">
+  Image export mode for documents (applies to JSON, Markdown, and HTML outputs).
+  
+  **Type:** Enum  
+  **Default:** `embedded`  
+  **Options:**
+  - `placeholder` - Only mark image positions in output
+  - `embedded` - Embed images as base64 encoded strings
+  - `referenced` - Export images as PNG files and reference them
+</ParamField>
+
+<ParamField path="--show-layout" type="flag">
+  If enabled, page images will show bounding boxes of detected items.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+</ParamField>
+
+### Pipeline Configuration
+
+<ParamField path="--pipeline" type="option">
+  Choose the processing pipeline for PDF or image files.
+  
+  **Type:** Enum  
+  **Default:** `standard`  
+  **Options:**
+  - `standard` - Traditional document processing pipeline
+  - `vlm` - Vision-Language Model based pipeline
+  
+  **Example:**
+  ```bash
+  docling convert doc.pdf --pipeline vlm --vlm-model granite_docling
+  ```
+</ParamField>
+
+<ParamField path="--vlm-model" type="option">
+  Choose the VLM (Vision-Language Model) preset to use with PDF or image files.
+  
+  **Type:** String  
+  **Default:** `granite_docling`  
+  **Available presets:** `granite_docling`, `smol_docling`, and others
+  
+  Only applicable when `--pipeline vlm` is set.
+</ParamField>
+
+<ParamField path="--asr-model" type="option">
+  Choose the ASR (Automatic Speech Recognition) model for audio/video files.
+  
+  **Type:** Enum  
+  **Default:** `whisper_tiny`  
+  **Available models:**
+  - Auto-select: `whisper_tiny`, `whisper_base`, `whisper_small`, `whisper_medium`, `whisper_large`, `whisper_turbo`
+  - MLX variants: `whisper_tiny_mlx`, `whisper_base_mlx`, `whisper_small_mlx`, `whisper_medium_mlx`, `whisper_large_mlx`, `whisper_turbo_mlx`
+  - Native variants: `whisper_tiny_native`, `whisper_base_native`, `whisper_small_native`, `whisper_medium_native`, `whisper_large_native`, `whisper_turbo_native`
+</ParamField>
+
+### OCR Options
+
+<ParamField path="--ocr / --no-ocr" type="flag">
+  Enable or disable OCR for bitmap content.
+  
+  **Type:** Boolean  
+  **Default:** `true`
+  
+  **Example:**
+  ```bash
+  docling convert scan.pdf --ocr
+  ```
+</ParamField>
+
+<ParamField path="--force-ocr" type="flag">
+  Replace any existing text with OCR-generated text over the full content.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+  
+  Use this when existing text extraction is poor quality.
+</ParamField>
+
+<ParamField path="--ocr-engine" type="option">
+  The OCR engine to use.
+  
+  **Type:** String  
+  **Default:** `auto`  
+  **Available engines:** `auto`, `tesseract_cli`, `tesseract`, `easyocr`, `rapidocr`
+  
+  Additional engines may be available with `--allow-external-plugins`.
+  
+  **Example:**
+  ```bash
+  docling convert scan.pdf --ocr-engine easyocr
+  ```
+</ParamField>
+
+<ParamField path="--ocr-lang" type="option">
+  Comma-separated list of languages for the OCR engine.
+  
+  **Type:** String  
+  **Note:** Each OCR engine has different language code formats.
+  
+  **Example:**
+  ```bash
+  docling convert doc.pdf --ocr-lang "eng,fra,deu"
+  ```
+</ParamField>
+
+<ParamField path="--psm" type="option">
+  Page Segmentation Mode for the OCR engine.
+  
+  **Type:** Integer (0-13)  
+  **Applies to:** Tesseract engines only
+  
+  See Tesseract documentation for PSM mode details.
+</ParamField>
+
+### Table Processing Options
+
+<ParamField path="--tables / --no-tables" type="flag">
+  Enable or disable table structure extraction.
+  
+  **Type:** Boolean  
+  **Default:** `true`
+</ParamField>
+
+<ParamField path="--table-mode" type="option">
+  The mode to use in the table structure model.
+  
+  **Type:** Enum  
+  **Default:** `accurate`  
+  **Options:**
+  - `fast` - Faster processing, less accurate
+  - `accurate` - Slower processing, more accurate
+</ParamField>
+
+### PDF Backend Options
+
+<ParamField path="--pdf-backend" type="option">
+  The PDF backend to use for processing.
+  
+  **Type:** Enum  
+  **Default:** `docling_parse`  
+  **Options:**
+  - `docling_parse` - Recommended backend (default)
+  - `pypdfium2` - Alternative backend
+</ParamField>
+
+<ParamField path="--pdf-password" type="option">
+  Password for protected PDF documents.
+  
+  **Type:** String  
+  
+  **Example:**
+  ```bash
+  docling convert protected.pdf --pdf-password "secret123"
+  ```
+</ParamField>
+
+### Enrichment Options
+
+<ParamField path="--enrich-code" type="flag">
+  Enable code enrichment model in the pipeline.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+  
+  Improves detection and formatting of code blocks.
+</ParamField>
+
+<ParamField path="--enrich-formula" type="flag">
+  Enable formula enrichment model in the pipeline.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+  
+  Improves detection and rendering of mathematical formulas.
+</ParamField>
+
+<ParamField path="--enrich-picture-classes" type="flag">
+  Enable picture classification enrichment model.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+  
+  Classifies images into categories (charts, diagrams, photos, etc.).
+</ParamField>
+
+<ParamField path="--enrich-picture-description" type="flag">
+  Enable picture description model.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+  
+  Generates textual descriptions for images.
+</ParamField>
+
+<ParamField path="--enrich-chart-extraction" type="flag">
+  Enable chart extraction to convert bar, pie, and line charts to tabular format.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+  
+  **Example:**
+  ```bash
+  docling convert report.pdf --enrich-chart-extraction
+  ```
+</ParamField>
+
+### Performance Options
+
+<ParamField path="--num-threads" type="option">
+  Number of threads to use for processing.
+  
+  **Type:** Integer  
+  **Default:** `4`
+  
+  **Example:**
+  ```bash
+  docling convert doc.pdf --num-threads 8
+  ```
+</ParamField>
+
+<ParamField path="--device" type="option">
+  Accelerator device to use for model inference.
+  
+  **Type:** Enum  
+  **Default:** `auto`  
+  **Options:**
+  - `auto` - Automatically select best available device
+  - `cpu` - Use CPU only
+  - `cuda` - Use NVIDIA GPU
+  - `mps` - Use Apple Metal Performance Shaders (Mac)
+</ParamField>
+
+<ParamField path="--page-batch-size" type="option">
+  Number of pages processed in one batch.
+  
+  **Type:** Integer  
+  **Default:** System default (configurable)
+  
+  Larger values may improve throughput but use more memory.
+</ParamField>
+
+<ParamField path="--document-timeout" type="option">
+  Timeout for processing each document, in seconds.
+  
+  **Type:** Float  
+  
+  **Example:**
+  ```bash
+  docling convert doc.pdf --document-timeout 300
+  ```
+</ParamField>
+
+### Model and Plugin Options
+
+<ParamField path="--artifacts-path" type="option">
+  Location of model artifacts for offline use.
+  
+  **Type:** Path  
+  
+  **Example:**
+  ```bash
+  # First download models
+  docling tools models download --output-dir ./models
+  
+  # Then use offline
+  docling convert doc.pdf --artifacts-path ./models
+  ```
+</ParamField>
+
+<ParamField path="--enable-remote-services" type="flag">
+  Must be enabled when using models that connect to remote services.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="--allow-external-plugins" type="flag">
+  Must be enabled for loading modules from third-party plugins.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+  
+  **Example:**
+  ```bash
+  docling convert doc.pdf --allow-external-plugins --ocr-engine custom_plugin
+  ```
+</ParamField>
+
+<ParamField path="--show-external-plugins" type="flag">
+  List third-party plugins available when `--allow-external-plugins` is set.
+  
+  **Type:** Boolean  
+  
+  Displays available OCR, layout, and table extraction plugins.
+  
+  **Example:**
+  ```bash
+  docling convert --show-external-plugins
+  ```
+</ParamField>
+
+### Error Handling Options
+
+<ParamField path="--abort-on-error / --no-abort-on-error" type="flag">
+  Control whether processing should abort on first error.
+  
+  **Type:** Boolean  
+  **Default:** `false` (continue on errors)
+  
+  When disabled, failed documents are logged but processing continues.
+</ParamField>
+
+### Verbosity and Logging Options
+
+<ParamField path="-v, --verbose" type="flag">
+  Set verbosity level for logging.
+  
+  **Type:** Count (repeatable)  
+  **Levels:**
+  - No flag: WARNING level
+  - `-v`: INFO level
+  - `-vv`: DEBUG level
+  
+  **Example:**
+  ```bash
+  docling convert doc.pdf -vv  # Debug logging
+  ```
+</ParamField>
+
+### Debug Visualization Options
+
+<ParamField path="--debug-visualize-cells" type="flag">
+  Enable debug output which visualizes PDF cells.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="--debug-visualize-ocr" type="flag">
+  Enable debug output which visualizes OCR cells.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="--debug-visualize-layout" type="flag">
+  Enable debug output which visualizes layout clusters.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="--debug-visualize-tables" type="flag">
+  Enable debug output which visualizes table cells.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+  
+  **Example:**
+  ```bash
+  docling convert doc.pdf --debug-visualize-tables --output ./debug
+  ```
+</ParamField>
+
+### Profiling Options
+
+<ParamField path="--profiling" type="flag">
+  Enable profiling to summarize timing details for all conversion stages.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+  
+  Displays a detailed timing table after conversion.
+</ParamField>
+
+<ParamField path="--save-profiling" type="flag">
+  Save profiling summaries to JSON files.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+  
+  **Example:**
+  ```bash
+  docling convert doc.pdf --profiling --save-profiling
+  ```
+</ParamField>
+
+### Information Options
+
+<ParamField path="--version" type="flag">
+  Show version information and exit.
+  
+  **Output includes:**
+  - Docling version
+  - Docling Core version
+  - Docling IBM Models version
+  - Docling Parse version
+  - Python version and implementation
+  - Platform information
+  
+  **Example:**
+  ```bash
+  docling convert --version
+  ```
+</ParamField>
+
+<ParamField path="--logo" type="flag">
+  Display Docling ASCII art logo and exit.
+  
+  **Example:**
+  ```bash
+  docling convert --logo
+  ```
+</ParamField>
+
+---
+
+## Model Download Options
+
+These options apply to the `docling tools models download` command.
+
+<ParamField path="models" type="argument">
+  Specific models to download.
+  
+  **Type:** Multiple values allowed  
+  **Available models:**
+  - `layout` - Layout analysis model
+  - `tableformer` - Table structure extraction model
+  - `code_formula` - Code and formula detection model
+  - `picture_classifier` - Picture classification model
+  - `smolvlm` - Small VLM model
+  - `granitedocling` - Granite Docling VLM
+  - `granitedocling_mlx` - Granite Docling for MLX
+  - `smoldocling` - Small Docling VLM
+  - `smoldocling_mlx` - Small Docling for MLX
+  - `granite_vision` - Granite Vision model
+  - `granite_chart_extraction` - Chart extraction model
+  - `rapidocr` - RapidOCR model
+  - `easyocr` - EasyOCR model
+  
+  **Default models** (downloaded when no specific models specified):
+  - `layout`, `tableformer`, `code_formula`, `picture_classifier`, `rapidocr`
+</ParamField>
+
+<ParamField path="-o, --output-dir" type="option">
+  Directory where models will be downloaded.
+  
+  **Type:** Path  
+  **Default:** System cache directory
+  
+  **Example:**
+  ```bash
+  docling tools models download --output-dir /opt/docling-models
+  ```
+</ParamField>
+
+<ParamField path="--force" type="flag">
+  Force download even if models already exist.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="--all" type="flag">
+  Download all available models.
+  
+  **Type:** Boolean  
+  **Default:** `false`  
+  **Note:** Mutually exclusive with specifying individual models
+  
+  **Example:**
+  ```bash
+  docling tools models download --all
+  ```
+</ParamField>
+
+<ParamField path="-q, --quiet" type="flag">
+  Minimal output mode.
+  
+  **Type:** Boolean  
+  **Default:** `false`  
+  
+  When enabled, only prints the output directory path. Useful for scripts.
+  
+  **Example:**
+  ```bash
+  MODEL_DIR=$(docling tools models download --quiet)
+  ```
+</ParamField>
+
+---
+
+## HuggingFace Download Options
+
+These options apply to the `docling tools models download-hf-repo` command.
+
+<ParamField path="models" type="argument" required>
+  HuggingFace repository IDs to download.
+  
+  **Type:** Multiple values allowed  
+  **Format:** `org-name/repo-name`
+  
+  **Example:**
+  ```bash
+  docling tools models download-hf-repo docling-project/docling-models
+  ```
+</ParamField>
+
+<ParamField path="-o, --output-dir" type="option">
+  Directory where models will be downloaded.
+  
+  **Type:** Path  
+  **Default:** System cache directory
+</ParamField>
+
+<ParamField path="--force" type="flag">
+  Force download even if model already exists.
+  
+  **Type:** Boolean  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="-q, --quiet" type="flag">
+  Minimal output mode.
+  
+  **Type:** Boolean  
+  **Default:** `false`  
+  
+  When enabled, only prints the output directory path.
+</ParamField>

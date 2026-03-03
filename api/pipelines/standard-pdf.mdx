@@ -1,0 +1,201 @@
+---
+title: StandardPdfPipeline
+description: High-performance PDF pipeline with multi-threaded stages for parallel processing
+---
+
+## Overview
+
+`StandardPdfPipeline` is a thread-safe, production-ready PDF conversion pipeline that exploits parallelism between pipeline stages and models. It provides deterministic processing with per-run isolation and explicit back-pressure control.
+
+## Key Features
+
+- **Per-run isolation** - Every execute call uses its own bounded queues and worker threads
+- **Deterministic run identifiers** - Pages are tracked with internal run-id to avoid conflicts
+- **Explicit back-pressure & shutdown** - Producers block on full queues with clean propagation
+- **Minimal shared state** - Models initialized once per pipeline instance, read-only access by workers
+- **Thread-safe processing** - Concurrent invocations never share mutable state
+
+## Class Signature
+
+```python
+class StandardPdfPipeline(ConvertPipeline):
+    def __init__(self, pipeline_options: ThreadedPdfPipelineOptions) -> None
+```
+
+### Parameters
+
+<ParamField path="pipeline_options" type="ThreadedPdfPipelineOptions" required>
+  Configuration options for the threaded PDF pipeline
+  
+  <Expandable title="properties">
+    <ParamField path="queue_max_size" type="int">
+      Maximum size of queues between pipeline stages
+    </ParamField>
+    
+    <ParamField path="batch_polling_interval_seconds" type="float">
+      Timeout for batch polling operations
+    </ParamField>
+    
+    <ParamField path="ocr_batch_size" type="int">
+      Batch size for OCR processing
+    </ParamField>
+    
+    <ParamField path="layout_batch_size" type="int">
+      Batch size for layout model processing
+    </ParamField>
+    
+    <ParamField path="table_batch_size" type="int">
+      Batch size for table structure processing
+    </ParamField>
+    
+    <ParamField path="document_timeout" type="float | None">
+      Maximum time in seconds for document processing. If exceeded, returns PARTIAL_SUCCESS status
+    </ParamField>
+    
+    <ParamField path="do_ocr" type="bool" default="true">
+      Enable optical character recognition
+    </ParamField>
+    
+    <ParamField path="do_table_structure" type="bool" default="true">
+      Enable table structure recognition
+    </ParamField>
+    
+    <ParamField path="do_code_enrichment" type="bool" default="false">
+      Enable code block enrichment using VLM
+    </ParamField>
+    
+    <ParamField path="do_formula_enrichment" type="bool" default="false">
+      Enable formula enrichment using VLM
+    </ParamField>
+    
+    <ParamField path="generate_page_images" type="bool" default="false">
+      Generate page images in output
+    </ParamField>
+    
+    <ParamField path="generate_picture_images" type="bool" default="false">
+      Generate cropped images for picture elements
+    </ParamField>
+    
+    <ParamField path="generate_table_images" type="bool" default="false">
+      Generate cropped images for table elements (deprecated)
+    </ParamField>
+    
+    <ParamField path="generate_parsed_pages" type="bool" default="false">
+      Keep parsed page data in output
+    </ParamField>
+    
+    <ParamField path="images_scale" type="float" default="1.0">
+      Scale factor for generated images
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Methods
+
+### execute
+
+Executes the pipeline on an input document.
+
+```python
+def execute(
+    self,
+    in_doc: InputDocument,
+    raises_on_error: bool
+) -> ConversionResult
+```
+
+<ParamField path="in_doc" type="InputDocument" required>
+  Input document to process
+</ParamField>
+
+<ParamField path="raises_on_error" type="bool" required>
+  If True, raises exceptions on errors; otherwise captures them in ConversionResult
+</ParamField>
+
+<ResponseField name="return" type="ConversionResult">
+  Conversion result containing the processed document, pages, and status
+</ResponseField>
+
+### get_default_options
+
+Returns default pipeline options.
+
+```python
+@classmethod
+def get_default_options(cls) -> ThreadedPdfPipelineOptions
+```
+
+<ResponseField name="return" type="ThreadedPdfPipelineOptions">
+  Default configuration for StandardPdfPipeline
+</ResponseField>
+
+### is_backend_supported
+
+Checks if a backend is supported by this pipeline.
+
+```python
+@classmethod
+def is_backend_supported(cls, backend: AbstractDocumentBackend) -> bool
+```
+
+<ParamField path="backend" type="AbstractDocumentBackend" required>
+  Backend instance to check
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  True if backend is PdfDocumentBackend, False otherwise
+</ResponseField>
+
+## Pipeline Stages
+
+The StandardPdfPipeline processes documents through the following stages:
+
+1. **Preprocessing** - Lazy loading of PDF backends and page initialization
+2. **OCR** - Optical character recognition on page images
+3. **Layout** - Document layout analysis and element detection
+4. **Table Structure** - Table recognition and structure parsing
+5. **Assembly** - Page assembly and element organization
+
+Each stage runs in a dedicated worker thread with bounded queues for back-pressure control.
+
+## Usage Example
+
+```python
+from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
+from docling.datamodel.pipeline_options import ThreadedPdfPipelineOptions
+from docling.datamodel.document import InputDocument
+
+# Configure pipeline
+options = ThreadedPdfPipelineOptions(
+    do_ocr=True,
+    do_table_structure=True,
+    document_timeout=300.0,  # 5 minutes
+    ocr_batch_size=8,
+    layout_batch_size=4
+)
+
+# Create pipeline
+pipeline = StandardPdfPipeline(pipeline_options=options)
+
+# Process document
+input_doc = InputDocument(path_or_stream="document.pdf")
+result = pipeline.execute(input_doc, raises_on_error=False)
+
+if result.status == ConversionStatus.SUCCESS:
+    print(f"Processed {len(result.pages)} pages")
+    doc = result.document
+```
+
+## Error Handling
+
+- Failed pages are tracked separately and added to `ConversionResult.errors`
+- Timeout exceeded results in `ConversionStatus.PARTIAL_SUCCESS`
+- Complete failures return `ConversionStatus.FAILURE`
+- Worker threads are abandoned after 15s if stuck in blocking calls
+
+## Performance Considerations
+
+- Adjust batch sizes based on available memory and GPU capacity
+- Set `document_timeout` to prevent indefinite processing
+- Configure `queue_max_size` to balance memory usage and throughput
+- Disable unused features (OCR, table structure) to improve speed

@@ -1,0 +1,119 @@
+---
+title: PdfBackendOptions
+description: Configuration for PDF backend document parsing
+---
+
+## Overview
+
+`PdfBackendOptions` configures how PDF documents are parsed at the backend level, before pipeline processing stages.
+
+## PdfBackendOptions
+
+```python
+from docling.datamodel.backend_options import PdfBackendOptions
+from pydantic import SecretStr
+
+options = PdfBackendOptions(
+    password=SecretStr("secret123")
+)
+```
+
+### Parameters
+
+<ParamField path="kind" type="Literal['pdf']" default="'pdf'">
+  Backend type identifier. Always set to `"pdf"` for PDF backends.
+</ParamField>
+
+<ParamField path="password" type="SecretStr | None" default="None">
+  Password for encrypted PDF documents. Use Pydantic's `SecretStr` type to securely handle sensitive password data.
+  
+  **Example:**
+  ```python
+  from pydantic import SecretStr
+  options = PdfBackendOptions(password=SecretStr("my_password"))
+  ```
+</ParamField>
+
+<ParamField path="enable_remote_fetch" type="bool" default="False">
+  Enable fetching of remote resources referenced in the PDF document.
+</ParamField>
+
+<ParamField path="enable_local_fetch" type="bool" default="False">
+  Enable fetching of local resources referenced in the PDF document.
+</ParamField>
+
+## Usage
+
+### Basic Usage
+
+```python
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.backend_options import PdfBackendOptions
+from pydantic import SecretStr
+
+# Configure PDF backend
+pdf_options = PdfBackendOptions(
+    password=SecretStr("document_password")
+)
+
+# Apply to converter
+converter = DocumentConverter(
+    format_options={
+        PdfFormatOption: PdfFormatOption(
+            backend_options=pdf_options
+        )
+    }
+)
+
+result = converter.convert("encrypted.pdf")
+```
+
+### With Pipeline Options
+
+```python
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.backend_options import PdfBackendOptions
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    do_table_structure=True
+)
+
+backend_options = PdfBackendOptions(
+    enable_local_fetch=False
+)
+
+converter = DocumentConverter(
+    format_options={
+        PdfFormatOption: PdfFormatOption(
+            pipeline_options=pipeline_options,
+            backend_options=backend_options
+        )
+    }
+)
+```
+
+## Backend Selection
+
+Docling uses different PDF parsing backends depending on configuration:
+
+<Accordion title="Available PDF Backends">
+  <AccordionGroup>
+    <Accordion title="PYPDFIUM2">
+      Standard PDF parser using PyPDFium2 library. Fast and reliable for basic text extraction.
+    </Accordion>
+    
+    <Accordion title="DOCLING_PARSE">
+      Docling's advanced parsing backend with enhanced layout analysis and structure preservation. Provides better table detection and complex layout handling.
+      
+      This is the current recommended backend (replaces deprecated DLPARSE_V1, DLPARSE_V2, DLPARSE_V4).
+    </Accordion>
+  </AccordionGroup>
+</Accordion>
+
+## See Also
+
+- [PDF Backend](/api/backends/pdf) - PDF backend architecture
+- [Pipeline Options](/api/options/pipeline-options) - Pipeline configuration
+- [DocumentConverter](/api/document-converter) - Main conversion API

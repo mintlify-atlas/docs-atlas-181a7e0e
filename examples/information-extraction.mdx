@@ -1,0 +1,313 @@
+---
+title: Information Extraction
+description: Extract structured data from unstructured documents using VLM models
+---
+
+Extract structured information from documents using Vision-Language Models with schema-based extraction.
+
+## Overview
+
+Docling provides AI-powered information extraction to convert unstructured documents into structured data. This example demonstrates:
+- Defining data schemas with dictionaries or Pydantic models
+- Extracting data organized by page
+- Using default values and examples
+- Validating extracted data with Pydantic
+
+<Note>
+  The extraction API is currently **in beta** and may change without prior notice.
+</Note>
+
+## Installation
+
+```bash
+pip install docling[vlm]
+```
+
+## Basic Setup
+
+```python
+from docling.datamodel.base_models import InputFormat
+from docling.document_extractor import DocumentExtractor
+
+extractor = DocumentExtractor(
+    allowed_formats=[InputFormat.IMAGE, InputFormat.PDF]
+)
+```
+
+## Extract with String Template
+
+The simplest approach uses a JSON string template:
+
+```python extraction.ipynb
+file_path = "https://upload.wikimedia.org/wikipedia/commons/9/9f/Swiss_QR-Bill_example.jpg"
+
+result = extractor.extract(
+    source=file_path,
+    template='{"bill_no": "string", "total": "float"}',
+)
+
+print(result.pages)
+# Output:
+# [ExtractedPageData(
+#     page_no=1,
+#     extracted_data={'bill_no': '3139', 'total': 3949.75},
+#     raw_text='{"bill_no": "3139", "total": 3949.75}',
+#     errors=[]
+# )]
+```
+
+## Extract with Dict Template
+
+For better Python integration, use a dictionary:
+
+```python
+result = extractor.extract(
+    source=file_path,
+    template={
+        "bill_no": "string",
+        "total": "float",
+    },
+)
+
+print(result.pages[0].extracted_data)
+# {'bill_no': '3139', 'total': 3949.75}
+```
+
+## Extract with Pydantic Model
+
+<Steps>
+  <Step title="Define Pydantic Model">
+    Create a model with field types, defaults, and examples.
+  </Step>
+  
+  <Step title="Use Model as Template">
+    Pass the model class or instance to the extractor.
+  </Step>
+  
+  <Step title="Validate Results">
+    Load extracted data into Pydantic for validation.
+  </Step>
+</Steps>
+
+```python
+from typing import Optional
+from pydantic import BaseModel, Field
+
+class Invoice(BaseModel):
+    bill_no: str = Field(
+        examples=["A123", "5414"]
+    )
+    total: float = Field(
+        default=10,
+        examples=[20]
+    )
+    tax_id: Optional[str] = Field(
+        default=None,
+        examples=["1234567890"]
+    )
+
+# Use model class
+result = extractor.extract(
+    source=file_path,
+    template=Invoice,
+)
+
+print(result.pages[0].extracted_data)
+# {'bill_no': '3139', 'total': 3949.75, 'tax_id': None}
+```
+
+## Override Default Values
+
+You can provide a model instance with context-specific defaults:
+
+```python
+result = extractor.extract(
+    source=file_path,
+    template=Invoice(
+        bill_no="41",
+        total=100,
+        tax_id="42",
+    ),
+)
+
+print(result.pages[0].extracted_data)
+# If tax_id not found in document, uses '42' instead of None
+# {'bill_no': '3139', 'total': 3949.75, 'tax_id': '42'}
+```
+
+## Hierarchical Pydantic Models
+
+Define nested structures for complex documents:
+
+```python
+class Contact(BaseModel):
+    name: Optional[str] = Field(default=None, examples=["Smith"])
+    address: str = Field(default="123 Main St", examples=["456 Elm St"])
+    postal_code: str = Field(default="12345", examples=["67890"])
+    city: str = Field(default="Anytown", examples=["Othertown"])
+    country: Optional[str] = Field(default=None, examples=["Canada"])
+
+class ExtendedInvoice(BaseModel):
+    bill_no: str = Field(examples=["A123", "5414"])
+    total: float = Field(default=10, examples=[20])
+    garden_work_hours: int = Field(default=1, examples=[2])
+    sender: Contact = Field(default=Contact(), examples=[Contact()])
+    receiver: Contact = Field(default=Contact(), examples=[Contact()])
+
+result = extractor.extract(
+    source=file_path,
+    template=ExtendedInvoice,
+)
+
+print(result.pages[0].extracted_data)
+# {
+#     'bill_no': '3139',
+#     'total': 3949.75,
+#     'garden_work_hours': 28,
+#     'sender': {
+#         'name': 'Robert Schneider',
+#         'address': 'Rue du Lac 1268',
+#         'postal_code': '2501',
+#         'city': 'Biel',
+#         'country': 'Switzerland'
+#     },
+#     'receiver': {
+#         'name': 'Pia Rutschmann',
+#         'address': 'Marktgasse 28',
+#         'postal_code': '9400',
+#         'city': 'Rorschach',
+#         'country': 'Switzerland'
+#     }
+# }
+```
+
+## Validate and Load Data
+
+Use Pydantic to validate extracted data:
+
+```python
+invoice = ExtendedInvoice.model_validate(
+    result.pages[0].extracted_data
+)
+
+print(invoice)
+# ExtendedInvoice(
+#     bill_no='3139',
+#     total=3949.75,
+#     garden_work_hours=28,
+#     sender=Contact(...),
+#     receiver=Contact(...)
+# )
+
+# Access typed fields
+print(f"Invoice #{invoice.bill_no} from {invoice.sender.name}")
+print(f"Total: ${invoice.total}")
+print(f"Sender: {invoice.sender.name}, {invoice.sender.city}")
+print(f"Receiver: {invoice.receiver.name}, {invoice.receiver.city}")
+```
+
+## Complete Example
+
+```python
+from typing import Optional
+from pydantic import BaseModel, Field
+from docling.datamodel.base_models import InputFormat
+from docling.document_extractor import DocumentExtractor
+
+# Define schema
+class Invoice(BaseModel):
+    bill_no: str = Field(examples=["A123"])
+    total: float = Field(default=0.0, examples=[100.0])
+    date: Optional[str] = Field(default=None, examples=["2024-01-01"])
+    vendor: Optional[str] = Field(default=None, examples=["ACME Corp"])
+
+# Create extractor
+extractor = DocumentExtractor(
+    allowed_formats=[InputFormat.IMAGE, InputFormat.PDF]
+)
+
+# Extract from document
+file_path = "invoice.jpg"
+result = extractor.extract(
+    source=file_path,
+    template=Invoice,
+)
+
+# Validate and use
+for page_data in result.pages:
+    invoice = Invoice.model_validate(page_data.extracted_data)
+    print(f"Invoice {invoice.bill_no}: ${invoice.total}")
+    print(f"Vendor: {invoice.vendor}")
+    print(f"Date: {invoice.date}")
+    
+    # Handle errors
+    if page_data.errors:
+        print(f"Errors: {page_data.errors}")
+```
+
+## Result Structure
+
+Each extraction result contains:
+
+```python
+class ExtractedPageData:
+    page_no: int                    # Page number
+    extracted_data: dict            # Extracted structured data
+    raw_text: str                   # Raw model output
+    errors: list                    # Any extraction errors
+```
+
+## Template Types
+
+<CodeGroup>
+
+```python String Template
+template = '{"field1": "string", "field2": "int"}'
+```
+
+```python Dict Template
+template = {
+    "field1": "string",
+    "field2": "int",
+}
+```
+
+```python Pydantic Class
+class Schema(BaseModel):
+    field1: str
+    field2: int
+
+template = Schema
+```
+
+```python Pydantic Instance
+template = Schema(
+    field1="default",
+    field2=0,
+)
+```
+
+</CodeGroup>
+
+## Best Practices
+
+1. **Use Pydantic models** for complex schemas and validation
+2. **Provide examples** in Field definitions to guide extraction
+3. **Set sensible defaults** for optional or missing fields
+4. **Use hierarchical models** for nested document structures
+5. **Validate results** with Pydantic before using extracted data
+
+## Supported Input Formats
+
+- **PDF**: Both native and scanned PDFs
+- **Images**: PNG, JPG, TIFF
+
+<Note>
+  Only PDF and image formats are supported for extraction.
+</Note>
+
+## Requirements
+
+- Python 3.9+
+- `docling[vlm]` for VLM model support
+- Network access to download model weights on first use

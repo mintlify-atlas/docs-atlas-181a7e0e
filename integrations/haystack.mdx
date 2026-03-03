@@ -1,0 +1,224 @@
+---
+title: Haystack Integration
+description: Use Docling as a document converter in Haystack pipelines for RAG and NLP applications
+---
+
+Docling is available as a document converter in [Haystack](https://haystack.deepset.ai/), enabling high-fidelity document processing in your Haystack pipelines.
+
+## Overview
+
+The Docling Haystack integration provides:
+
+- Document conversion for Haystack pipelines
+- Support for multiple document formats (PDF, DOCX, PPTX, etc.)
+- High-fidelity table and layout extraction
+- Easy integration with existing Haystack workflows
+
+## Installation
+
+```bash
+pip install docling-haystack
+```
+
+## Quick Start
+
+Here's a simple example of using Docling in a Haystack pipeline:
+
+```python
+from docling_haystack import DoclingConverter
+from haystack import Pipeline
+
+# Create converter
+converter = DoclingConverter()
+
+# Convert a document
+result = converter.run(
+    sources=["document.pdf"]
+)
+
+# Access converted documents
+for doc in result["documents"]:
+    print(doc.content)
+    print(doc.meta)
+```
+
+## Building a RAG Pipeline
+
+```python
+from docling_haystack import DoclingConverter
+from haystack import Pipeline
+from haystack.components.writers import DocumentWriter
+from haystack.components.preprocessors import DocumentSplitter
+from haystack.components.embedders import SentenceTransformersDocumentEmbedder
+from haystack.document_stores.in_memory import InMemoryDocumentStore
+
+# Create components
+document_store = InMemoryDocumentStore()
+converter = DoclingConverter()
+splitter = DocumentSplitter(split_length=500, split_overlap=50)
+embedder = SentenceTransformersDocumentEmbedder()
+writer = DocumentWriter(document_store=document_store)
+
+# Build pipeline
+pipeline = Pipeline()
+pipeline.add_component("converter", converter)
+pipeline.add_component("splitter", splitter)
+pipeline.add_component("embedder", embedder)
+pipeline.add_component("writer", writer)
+
+# Connect components
+pipeline.connect("converter.documents", "splitter.documents")
+pipeline.connect("splitter.documents", "embedder.documents")
+pipeline.connect("embedder.documents", "writer.documents")
+
+# Run pipeline
+result = pipeline.run({
+    "converter": {"sources": ["document.pdf"]}
+})
+```
+
+## Advanced Configuration
+
+### Custom Conversion Options
+
+```python
+from docling_haystack import DoclingConverter
+from docling.datamodel.pipeline_options import PipelineOptions
+
+# Configure Docling options
+pipeline_options = PipelineOptions()
+pipeline_options.do_ocr = True
+pipeline_options.do_table_structure = True
+
+# Create converter with options
+converter = DoclingConverter(
+    pipeline_options=pipeline_options
+)
+
+result = converter.run(sources=["document.pdf"])
+```
+
+### Batch Processing
+
+```python
+from docling_haystack import DoclingConverter
+import glob
+
+converter = DoclingConverter()
+
+# Process multiple files
+files = glob.glob("documents/*.pdf")
+result = converter.run(sources=files)
+
+print(f"Converted {len(result['documents'])} documents")
+```
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="Pipeline Integration" icon="diagram-project">
+    Seamlessly integrates into Haystack pipelines
+  </Card>
+  <Card title="Multi-Format Support" icon="file">
+    Supports PDF, DOCX, PPTX, HTML, and more
+  </Card>
+  <Card title="Table Extraction" icon="table">
+    Accurately extracts table structures
+  </Card>
+  <Card title="OCR Support" icon="eye">
+    Process scanned documents and images
+  </Card>
+</CardGroup>
+
+## Complete RAG Application
+
+```python
+from docling_haystack import DoclingConverter
+from haystack import Pipeline
+from haystack.components.retrievers.in_memory import InMemoryBM25Retriever
+from haystack.components.builders import PromptBuilder
+from haystack.components.generators import OpenAIGenerator
+from haystack.document_stores.in_memory import InMemoryDocumentStore
+
+# Initialize document store
+document_store = InMemoryDocumentStore()
+
+# Indexing pipeline
+indexing_pipeline = Pipeline()
+indexing_pipeline.add_component("converter", DoclingConverter())
+indexing_pipeline.add_component("writer", DocumentWriter(document_store))
+indexing_pipeline.connect("converter.documents", "writer.documents")
+
+# Index documents
+indexing_pipeline.run({"converter": {"sources": ["document.pdf"]}})
+
+# Query pipeline
+template = """
+Given the following documents, answer the question.
+
+Documents:
+{% for doc in documents %}
+{{ doc.content }}
+{% endfor %}
+
+Question: {{ question }}
+Answer:
+"""
+
+query_pipeline = Pipeline()
+query_pipeline.add_component("retriever", InMemoryBM25Retriever(document_store))
+query_pipeline.add_component("prompt_builder", PromptBuilder(template=template))
+query_pipeline.add_component("llm", OpenAIGenerator())
+
+query_pipeline.connect("retriever.documents", "prompt_builder.documents")
+query_pipeline.connect("prompt_builder.prompt", "llm.prompt")
+
+# Query
+response = query_pipeline.run({
+    "retriever": {"query": "What is the main topic?"},
+    "prompt_builder": {"question": "What is the main topic?"}
+})
+
+print(response["llm"]["replies"][0])
+```
+
+## Use Cases
+
+<Steps>
+  <Step title="Document Indexing">
+    Convert and index large document collections
+  </Step>
+  <Step title="RAG Applications">
+    Build question-answering systems over documents
+  </Step>
+  <Step title="Content Extraction">
+    Extract structured content from unstructured documents
+  </Step>
+  <Step title="Search Pipelines">
+    Enable semantic search over document collections
+  </Step>
+</Steps>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book" href="https://haystack.deepset.ai/integrations/docling">
+    Official Haystack integration docs
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/docling-project/docling-haystack">
+    Source code and examples
+  </Card>
+  <Card title="Example Notebook" icon="code" href="/examples/rag-haystack">
+    Complete RAG example
+  </Card>
+  <Card title="PyPI" icon="box" href="https://pypi.org/project/docling-haystack">
+    Package repository
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+- Explore the [Haystack documentation](https://haystack.deepset.ai/integrations/docling)
+- Check out the [example notebook](/examples/rag-haystack)
+- Learn about pipeline options
+- Build your first [Haystack application](https://haystack.deepset.ai/tutorials)

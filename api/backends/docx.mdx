@@ -1,0 +1,328 @@
+---
+title: DOCX Backend
+description: Microsoft Word document parsing and conversion
+---
+
+## Overview
+
+The DOCX backend (`MsWordDocumentBackend`) parses Microsoft Word documents (.docx files) and converts them directly to `DoclingDocument` format. It preserves document structure, formatting, and embedded content without requiring ML-based analysis.
+
+## Features
+
+- **Complete structure preservation** - Headings, paragraphs, lists, tables
+- **Rich formatting support** - Bold, italic, underline, strikethrough, superscript, subscript
+- **Hyperlinks and cross-references** - Preserves internal and external links
+- **Table extraction** - Full table structure with merged cells
+- **Image extraction** - Embedded pictures and diagrams
+- **Equation support** - Converts Office Math (OMML) to LaTeX
+- **Textbox content** - Extracts text from textboxes and shapes
+- **Comments** - Preserves document comments
+- **Header and footer** - Extracts header/footer content
+- **List numbering** - Maintains numbered and bulleted lists
+
+## Usage
+
+### Basic Conversion
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.docx")
+
+# Access converted document
+doc = result.document
+print(doc.export_to_markdown())
+```
+
+### With Format Options
+
+```python
+from docling.document_converter import DocumentConverter, DocxFormatOption
+
+converter = DocumentConverter(
+    format_options={
+        DocxFormatOption: DocxFormatOption(
+            # DOCX backend has no specific options currently
+        )
+    }
+)
+
+result = converter.convert("document.docx")
+```
+
+## Supported Elements
+
+### Text and Formatting
+
+<AccordionGroup>
+  <Accordion title="Paragraphs and Headings">
+    The backend automatically detects:
+    - Heading levels (H1-H9) based on paragraph styles
+    - Title and subtitle styles
+    - Normal paragraphs and body text
+    - Numbered headings (preserves numbering)
+    
+    ```python
+    # Headings are converted to DoclingDocument heading items
+    for item, _ in doc.iterate_items():
+        if isinstance(item, HeadingItem):
+            print(f"Heading L{item.level}: {item.text}")
+    ```
+  </Accordion>
+  
+  <Accordion title="Text Formatting">
+    Supported inline formatting:
+    - **Bold** (`<w:b>`)
+    - *Italic* (`<w:i>`)
+    - Underline (`<w:u>`)
+    - ~~Strikethrough~~ (`<w:strike>`)
+    - Subscript and superscript (`<w:vertAlign>`)
+    
+    ```python
+    for item, _ in doc.iterate_items():
+        if isinstance(item, TextItem) and item.formatting:
+            print(f"Formatted: {item.text}")
+            print(f"  Bold: {item.formatting.bold}")
+            print(f"  Italic: {item.formatting.italic}")
+    ```
+  </Accordion>
+  
+  <Accordion title="Hyperlinks">
+    Internal and external hyperlinks are preserved:
+    
+    ```python
+    for item, _ in doc.iterate_items():
+        if isinstance(item, TextItem) and item.hyperlink:
+            print(f"Link: {item.text} -> {item.hyperlink}")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Lists
+
+The backend fully supports Word's list structures:
+
+- **Bulleted lists** - Unordered lists with various bullet styles
+- **Numbered lists** - Ordered lists with automatic numbering
+- **Multi-level lists** - Nested list hierarchies
+- **Mixed lists** - Combination of numbered and bulleted items
+
+```python
+for item, _ in doc.iterate_items():
+    if isinstance(item, ListItem):
+        print(f"{'  ' * item.level}{item.marker} {item.text}")
+```
+
+### Tables
+
+Complete table extraction with:
+- Cell content and formatting
+- Merged cells (rowspan/colspan)
+- Header row detection
+- Nested table support
+
+```python
+for table, _ in doc.iterate_items():
+    if isinstance(table, TableItem):
+        print(f"Table: {table.data.num_rows} x {table.data.num_cols}")
+        for cell in table.data.table_cells:
+            print(f"  Cell ({cell.start_row_offset_idx},{cell.start_col_offset_idx}): {cell.text}")
+```
+
+### Images and Diagrams
+
+Extracts embedded images:
+- Inline pictures
+- Floating images
+- DrawingML shapes (requires LibreOffice)
+- VML graphics
+
+```python
+for item, _ in doc.iterate_items():
+    if isinstance(item, PictureItem):
+        print(f"Image: {item.caption}")
+        # Access image data
+        img = item.image.pil_image
+        img.save(f"image_{item.self_ref}.png")
+```
+
+### Equations
+
+Office Math ML (OMML) equations are converted to LaTeX:
+
+```python
+for item, _ in doc.iterate_items():
+    if item.label == DocItemLabel.FORMULA:
+        print(f"Formula: {item.text}")
+        # Text contains LaTeX representation
+```
+
+### Textboxes
+
+Content from textboxes and shapes is extracted:
+- Modern Word textboxes (`<w:txbxContent>`)
+- Legacy VML textboxes
+- DrawingML shape text
+
+## DrawingML Support
+
+For complex DrawingML elements (charts, diagrams, SmartArt), Docling can use LibreOffice for conversion:
+
+### Setup
+
+```bash
+# Install LibreOffice
+# Ubuntu/Debian
+sudo apt-get install libreoffice
+
+# macOS
+brew install libreoffice
+
+# Set path if not in PATH
+export DOCLING_LIBREOFFICE_CMD=/usr/bin/soffice
+```
+
+Without LibreOffice, DrawingML elements will be skipped with a warning.
+
+## Comments
+
+Document comments are extracted and linked to their annotated paragraphs:
+
+```python
+# Comments are preserved in the document
+for item in doc.items:
+    if hasattr(item, 'comments'):
+        for comment in item.comments:
+            print(f"Comment: {comment.text}")
+```
+
+## Header and Footer
+
+Header and footer content is extracted as furniture-layer content:
+
+```python
+from docling_core.types.doc.document import ContentLayer
+
+for item, _ in doc.iterate_items():
+    if item.content_layer == ContentLayer.FURNITURE:
+        print(f"Furniture: {item.text}")
+```
+
+## Advanced Features
+
+### Numbered Headings
+
+Word documents with numbered headings (e.g., "1.2.3 Section Title") preserve numbering:
+
+```python
+# Numbered headings include automatic numbering
+for item, _ in doc.iterate_items():
+    if isinstance(item, HeadingItem):
+        print(f"{item.text}")  # "1.2.3 Section Title"
+```
+
+### List Counters
+
+The backend tracks list counters across the document:
+- Separate counters per list ID and level
+- Automatic reset on new sequences
+- Support for custom start numbers
+
+### Style Detection
+
+Automatic detection of Word styles:
+- Built-in styles (Heading 1-9, Title, Normal, etc.)
+- Custom user styles
+- Style inheritance
+
+## Limitations
+
+<Warning>
+  **Known Limitations:**
+  
+  - **DrawingML**: Requires LibreOffice for complex shapes and charts
+  - **Track Changes**: Revision tracking not fully supported
+  - **Custom XML**: Custom Office XML not parsed
+  - **Embedded Objects**: OLE objects may not extract
+  - **Page Layout**: Page breaks and columns not preserved in structure
+</Warning>
+
+## Performance
+
+- **Speed**: Very fast for declarative conversion (no ML models)
+- **Memory**: Low memory footprint
+- **Concurrency**: Thread-safe per document instance
+
+```python
+import concurrent.futures
+
+def convert_docx(file_path):
+    converter = DocumentConverter()
+    return converter.convert(file_path)
+
+# Process multiple DOCX files in parallel
+files = ["doc1.docx", "doc2.docx", "doc3.docx"]
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    results = list(executor.map(convert_docx, files))
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Missing images">
+    **Cause**: DrawingML shapes require LibreOffice
+    
+    **Solution**:
+    ```bash
+    # Install LibreOffice
+    sudo apt-get install libreoffice
+    
+    # Or set path
+    export DOCLING_LIBREOFFICE_CMD=/path/to/soffice
+    ```
+  </Accordion>
+  
+  <Accordion title="Incorrect list numbering">
+    **Cause**: Custom numbering formats or broken document
+    
+    **Solution**: Check source document in Word, ensure numbering is valid
+  </Accordion>
+  
+  <Accordion title="Missing text from textboxes">
+    **Cause**: Nested or complex textbox structures
+    
+    **Workaround**: Backend attempts multiple textbox formats; some edge cases may not extract
+  </Accordion>
+  
+  <Accordion title="Equation rendering issues">
+    **Cause**: Complex OMML structures
+    
+    **Note**: Most standard equations convert correctly to LaTeX
+  </Accordion>
+</AccordionGroup>
+
+## Export Formats
+
+After conversion, export to various formats:
+
+```python
+result = converter.convert("document.docx")
+doc = result.document
+
+# Export to Markdown
+markdown = doc.export_to_markdown()
+
+# Export to Docling JSON
+json_doc = doc.model_dump_json()
+
+# Export to plain text
+text = doc.export_to_text()
+```
+
+## See Also
+
+- [Backends Overview](/api/backends/overview) - Backend architecture
+- [PPTX Backend](/api/backends/pptx) - PowerPoint processing
+- [XLSX Backend](/api/backends/xlsx) - Excel processing
+- [DocumentConverter](/api/document-converter) - Main conversion API

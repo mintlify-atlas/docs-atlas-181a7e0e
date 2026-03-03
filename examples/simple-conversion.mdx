@@ -1,0 +1,62 @@
+---
+title: Simple Conversion
+description: Convert a single document to Markdown with minimal setup
+---
+
+The simplest way to get started with Docling is to convert a single document and print the output.
+
+## Quick Example
+
+This example converts a PDF from a URL and prints the Markdown output to stdout.
+
+```python minimal.py
+from docling.document_converter import DocumentConverter
+
+# Change this to a local path or another URL if desired.
+# Note: using the default URL requires network access; if offline, provide a
+# local file path (e.g., Path("/path/to/file.pdf")).
+source = "https://arxiv.org/pdf/2408.09869"
+
+converter = DocumentConverter()
+result = converter.convert(source)
+
+# Print Markdown to stdout.
+print(result.document.export_to_markdown())
+```
+
+## How It Works
+
+<Steps>
+  <Step title="Import the Converter">
+    Import `DocumentConverter` from the `docling` package.
+  </Step>
+  
+  <Step title="Specify the Source">
+    Provide a URL or local file path. Docling auto-detects the format (PDF, DOCX, HTML, PPTX, images, etc.).
+  </Step>
+  
+  <Step title="Convert the Document">
+    Call `converter.convert(source)` to process the document.
+  </Step>
+  
+  <Step title="Export to Markdown">
+    Use `result.document.export_to_markdown()` to get the converted text.
+  </Step>
+</Steps>
+
+<Note>
+  The converter auto-detects supported formats including PDF, DOCX, HTML, PPTX, images, and more.
+</Note>
+
+## Requirements
+
+- Python 3.9+
+- Install Docling: `pip install docling`
+
+## Running the Example
+
+```bash
+python docs/examples/minimal.py
+```
+
+For batch processing or saving outputs to files, see [Batch Conversion](/examples/batch-conversion).

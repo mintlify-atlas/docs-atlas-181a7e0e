@@ -1,0 +1,644 @@
+---
+title: Plugin System
+description: Extend Docling with third-party plugins for OCR engines, layout models, and custom processing stages
+---
+
+## Overview
+
+Docling's plugin system enables third-party developers to extend Docling's capabilities by registering custom:
+
+- **OCR Engines**: Add support for new optical character recognition engines
+- **Layout Models**: Integrate custom document layout detection models
+- **Table Structure Models**: Provide alternative table extraction engines
+- **Picture Description Models**: Add custom vision-language models
+
+Plugins are loaded via the [pluggy](https://github.com/pytest-dev/pluggy/) framework using [setuptools entry points](https://setuptools.pypa.io/en/latest/userguide/entry_point.html#entry-points-for-plugins).
+
+**Source**: ~/workspace/source/docs/concepts/plugins.md:1
+
+## Plugin Architecture
+
+### Entry Point Registration
+
+Plugins register themselves through setuptools entry points under the `"docling"` group.
+
+<CodeGroup>
+```toml pyproject.toml
+[project.entry-points."docling"]
+your_plugin_name = "your_package.module"
+```
+
+```toml Poetry v1 pyproject.toml
+[tool.poetry.plugins."docling"]
+your_plugin_name = "your_package.module"
+```
+
+```ini setup.cfg
+[options.entry_points]
+docling =
+    your_plugin_name = your_package.module
+```
+
+```python setup.py
+from setuptools import setup
+
+setup(
+    # ...,
+    entry_points = {
+        'docling': [
+            'your_plugin_name = your_package.module'
+        ]
+    }
+)
+```
+</CodeGroup>
+
+**Source**: ~/workspace/source/docs/concepts/plugins.md:5
+
+- `your_plugin_name`: Unique name for your plugin in the Docling ecosystem
+- `your_package.module`: Python module that registers the plugin factories
+
+### Plugin Discovery
+
+Docling automatically discovers installed plugins at runtime through the pluggy system. Third-party plugins must be explicitly enabled:
+
+```python
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+
+pipeline_options = PdfPipelineOptions()
+pipeline_options.allow_external_plugins = True  # Enable third-party plugins
+```
+
+## Plugin Factories
+
+### OCR Factory
+
+The OCR factory registers custom OCR engines.
+
+**Source**: ~/workspace/source/docs/concepts/plugins.md:47
+
+#### Implementation
+
+```python
+# your_package/module.py
+
+from docling.models.base_ocr_model import BaseOcrModel
+from docling.datamodel.pipeline_options import OcrOptions
+from pydantic import Field
+from typing import ClassVar, Iterable
+import logging
+
+# Define your OCR options
+class YourOcrOptions(OcrOptions):
+    kind: ClassVar[str] = "your_ocr_engine"
+    
+    # Add custom configuration fields
+    confidence_threshold: float = Field(
+        default=0.8,
+        description="Minimum confidence score for OCR results"
+    )
+    language_model: str = Field(
+        default="en",
+        description="Language model to use"
+    )
+
+# Implement your OCR model
+class YourOcrModel(BaseOcrModel):
+    def __init__(self, options: YourOcrOptions):
+        self.options = options
+        self.engine = self._initialize_engine()
+        self._log = logging.getLogger(__name__)
+    
+    def _initialize_engine(self):
+        # Initialize your OCR engine here
+        return YourOCREngine()
+    
+    @classmethod
+    def get_options_type(cls):
+        return YourOcrOptions
+    
+    def __call__(self, conv_res, page_batch: Iterable):
+        """Process a batch of pages and return OCR results."""
+        for page in page_batch:
+            # Your OCR logic here
+            ocr_result = self.engine.recognize(page.image)
+            
+            # Add OCR results to page
+            page.ocr_cells.extend(ocr_result.cells)
+            
+            yield page
+
+# Factory registration
+def ocr_engines():
+    return {
+        "ocr_engines": [
+            YourOcrModel,
+        ]
+    }
+```
+
+**Source**: ~/workspace/source/docs/concepts/plugins.md:54
+
+#### Base Class Requirements
+
+Your OCR model must:
+- Inherit from [`BaseOcrModel`](https://github.com/docling-project/docling/blob/main/docling/models/base_ocr_model.py#L23)
+- Provide an options class derived from [`OcrOptions`](https://github.com/docling-project/docling/blob/main/docling/datamodel/pipeline_options.py#L105)
+- Implement `get_options_type()` class method
+- Implement `__call__(conv_res, page_batch)` for batch processing
+
+#### Reference Implementation
+
+See the [default Docling plugins](https://github.com/docling-project/docling/blob/main/docling/models/plugins/defaults.py) for examples.
+
+**Source**: ~/workspace/source/docling/models/plugins/defaults.py:1
+
+```python
+# Docling's built-in OCR engines
+def ocr_engines():
+    from docling.models.stages.ocr.auto_ocr_model import OcrAutoModel
+    from docling.models.stages.ocr.easyocr_model import EasyOcrModel
+    from docling.models.stages.ocr.ocr_mac_model import OcrMacModel
+    from docling.models.stages.ocr.rapid_ocr_model import RapidOcrModel
+    from docling.models.stages.ocr.tesseract_ocr_cli_model import TesseractOcrCliModel
+    from docling.models.stages.ocr.tesseract_ocr_model import TesseractOcrModel
+
+    return {
+        "ocr_engines": [
+            OcrAutoModel,
+            EasyOcrModel,
+            OcrMacModel,
+            RapidOcrModel,
+            TesseractOcrModel,
+            TesseractOcrCliModel,
+        ]
+    }
+```
+
+### Layout Engine Factory
+
+Register custom layout detection models.
+
+**Source**: ~/workspace/source/docling/models/plugins/defaults.py:41
+
+```python
+def layout_engines():
+    from docling.models.stages.layout.layout_model import LayoutModel
+    from docling.models.stages.layout.layout_object_detection_model import (
+        LayoutObjectDetectionModel,
+    )
+
+    return {
+        "layout_engines": [
+            LayoutObjectDetectionModel,
+            LayoutModel,
+        ]
+    }
+```
+
+### Table Structure Factory
+
+Register custom table extraction engines.
+
+**Source**: ~/workspace/source/docling/models/plugins/defaults.py:59
+
+```python
+def table_structure_engines():
+    from docling.models.stages.table_structure.table_structure_model import (
+        TableStructureModel,
+    )
+
+    return {
+        "table_structure_engines": [
+            TableStructureModel,
+        ]
+    }
+```
+
+### Picture Description Factory
+
+Register custom vision-language models for image captioning.
+
+**Source**: ~/workspace/source/docling/models/plugins/defaults.py:21
+
+```python
+def picture_description():
+    from docling.models.stages.picture_description.picture_description_api_model import (
+        PictureDescriptionApiModel,
+    )
+    from docling.models.stages.picture_description.picture_description_vlm_engine_model import (
+        PictureDescriptionVlmEngineModel,
+    )
+    from docling.models.stages.picture_description.picture_description_vlm_model import (
+        PictureDescriptionVlmModel,
+    )
+
+    return {
+        "picture_description": [
+            PictureDescriptionVlmEngineModel,  # New engine-based (preferred)
+            PictureDescriptionVlmModel,  # Legacy direct transformers
+            PictureDescriptionApiModel,  # API-based
+        ]
+    }
+```
+
+## Using Plugins
+
+### Python API
+
+Enable and configure external plugins:
+
+```python
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+# Import your plugin's options class
+from your_package import YourOcrOptions
+
+pipeline_options = PdfPipelineOptions()
+
+# Enable external plugins
+pipeline_options.allow_external_plugins = True
+
+# Configure your plugin
+pipeline_options.ocr_options = YourOcrOptions(
+    lang=["eng", "spa"],
+    confidence_threshold=0.9
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_options=pipeline_options
+        )
+    }
+)
+
+result = converter.convert("document.pdf")
+```
+
+**Source**: ~/workspace/source/docs/concepts/plugins.md:72
+
+### Command Line Interface
+
+When using the Docling CLI, enable external plugins before selecting them:
+
+```bash
+# List available external plugins
+docling --show-external-plugins
+
+# Run with external OCR plugin
+docling --allow-external-plugins --ocr-engine=your_ocr_engine document.pdf
+```
+
+**Source**: ~/workspace/source/docs/concepts/plugins.md:92
+
+## Plugin Development Guide
+
+### Step 1: Create Plugin Package
+
+```bash
+mkdir docling-plugin-example
+cd docling-plugin-example
+```
+
+Create package structure:
+```
+docling-plugin-example/
+├── pyproject.toml
+├── README.md
+└── docling_plugin_example/
+    ├── __init__.py
+    ├── my_ocr_model.py
+    └── my_ocr_options.py
+```
+
+### Step 2: Implement Plugin
+
+```python
+# docling_plugin_example/my_ocr_options.py
+from docling.datamodel.pipeline_options import OcrOptions
+from pydantic import Field
+from typing import ClassVar
+
+class MyOcrOptions(OcrOptions):
+    kind: ClassVar[str] = "my_ocr"
+    
+    api_key: str = Field(
+        description="API key for OCR service"
+    )
+    region: str = Field(
+        default="us-east-1",
+        description="Service region"
+    )
+```
+
+```python
+# docling_plugin_example/my_ocr_model.py
+from docling.models.base_ocr_model import BaseOcrModel
+from .my_ocr_options import MyOcrOptions
+from typing import Iterable
+import logging
+
+class MyOcrModel(BaseOcrModel):
+    def __init__(self, options: MyOcrOptions):
+        self.options = options
+        self._log = logging.getLogger(__name__)
+        self._initialize_client()
+    
+    def _initialize_client(self):
+        # Initialize your OCR client/engine
+        self.client = ExternalOCRService(
+            api_key=self.options.api_key,
+            region=self.options.region
+        )
+    
+    @classmethod
+    def get_options_type(cls):
+        return MyOcrOptions
+    
+    def __call__(self, conv_res, page_batch: Iterable):
+        for page in page_batch:
+            # Convert page to image
+            image = page.get_image()
+            
+            # Call your OCR service
+            result = self.client.recognize(
+                image,
+                languages=self.options.lang
+            )
+            
+            # Convert result to Docling format
+            for word in result.words:
+                ocr_cell = OcrCell(
+                    text=word.text,
+                    confidence=word.confidence,
+                    bbox=word.bounding_box
+                )
+                page.ocr_cells.append(ocr_cell)
+            
+            yield page
+```
+
+```python
+# docling_plugin_example/__init__.py
+from .my_ocr_model import MyOcrModel
+
+def ocr_engines():
+    """Plugin factory for OCR engines."""
+    return {
+        "ocr_engines": [
+            MyOcrModel,
+        ]
+    }
+
+__all__ = ["MyOcrModel", "ocr_engines"]
+```
+
+### Step 3: Configure Entry Point
+
+```toml
+# pyproject.toml
+[project]
+name = "docling-plugin-example"
+version = "0.1.0"
+description = "Example OCR plugin for Docling"
+requires-python = ">=3.10"
+dependencies = [
+    "docling>=2.0.0",
+    # Your dependencies here
+]
+
+[project.entry-points."docling"]
+my_ocr_plugin = "docling_plugin_example"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+```
+
+### Step 4: Install and Test
+
+```bash
+# Install in development mode
+pip install -e .
+
+# Test plugin discovery
+python -c "import pluggy; print(pluggy.PluginManager('docling').list_name_plugin())"
+```
+
+### Step 5: Use Your Plugin
+
+```python
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+from docling_plugin_example import MyOcrOptions
+
+pipeline_options = PdfPipelineOptions()
+pipeline_options.allow_external_plugins = True
+pipeline_options.ocr_options = MyOcrOptions(
+    lang=["eng"],
+    api_key="your-api-key",
+    region="us-west-2"
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_options=pipeline_options
+        )
+    }
+)
+
+result = converter.convert("document.pdf")
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Naming Conventions">
+    - Use descriptive, unique plugin names (e.g., `docling-plugin-aws-textract`)
+    - Prefix your package with `docling-plugin-` for discoverability
+    - Use lowercase with hyphens for package names
+    - Use snake_case for Python modules
+  </Accordion>
+
+  <Accordion title="Error Handling">
+    ```python
+    class MyOcrModel(BaseOcrModel):
+        def __call__(self, conv_res, page_batch):
+            for page in page_batch:
+                try:
+                    # Your OCR logic
+                    result = self.client.recognize(page.image)
+                    # Process result
+                except OCRServiceError as e:
+                    self._log.error(f"OCR failed for page {page.page_no}: {e}")
+                    # Handle gracefully - don't break pipeline
+                    page.ocr_cells = []  # Empty results
+                
+                yield page
+    ```
+  </Accordion>
+
+  <Accordion title="Configuration Validation">
+    Use Pydantic's validation features:
+    
+    ```python
+    from pydantic import Field, field_validator
+    
+    class MyOcrOptions(OcrOptions):
+        api_key: str = Field(min_length=10)
+        
+        @field_validator('api_key')
+        def validate_api_key(cls, v):
+            if not v.startswith('ak_'):
+                raise ValueError('API key must start with ak_')
+            return v
+    ```
+  </Accordion>
+
+  <Accordion title="Resource Management">
+    Clean up resources properly:
+    
+    ```python
+    class MyOcrModel(BaseOcrModel):
+        def __init__(self, options):
+            self.options = options
+            self.client = None
+        
+        def _initialize_client(self):
+            if self.client is None:
+                self.client = OCRClient()
+        
+        def __del__(self):
+            if self.client:
+                self.client.close()
+    ```
+  </Accordion>
+
+  <Accordion title="Testing">
+    Provide comprehensive tests:
+    
+    ```python
+    # tests/test_my_ocr.py
+    import pytest
+    from docling_plugin_example import MyOcrModel, MyOcrOptions
+    
+    def test_ocr_initialization():
+        options = MyOcrOptions(
+            lang=["eng"],
+            api_key="test_key"
+        )
+        model = MyOcrModel(options)
+        assert model.options.api_key == "test_key"
+    
+    def test_ocr_processing():
+        # Test with sample document
+        pass
+    ```
+  </Accordion>
+
+  <Accordion title="Documentation">
+    Document your plugin thoroughly:
+    - README with installation instructions
+    - Configuration options reference
+    - Usage examples
+    - Supported features and limitations
+    - Performance characteristics
+  </Accordion>
+</AccordionGroup>
+
+## Security Considerations
+
+<Warning>
+**External plugins run with full application privileges.** Only install plugins from trusted sources.
+</Warning>
+
+- Validate all user inputs in your plugin
+- Don't store API keys or secrets in code - use configuration
+- Be transparent about data transmission to external services
+- Follow secure coding practices
+- Keep dependencies up to date
+
+## Publishing Your Plugin
+
+### PyPI Distribution
+
+```bash
+# Build distribution
+pip install build
+python -m build
+
+# Upload to PyPI
+pip install twine
+twine upload dist/*
+```
+
+### Documentation
+
+Create a comprehensive README:
+
+```markdown
+# Docling Plugin: Example OCR
+
+Custom OCR engine plugin for Docling.
+
+## Installation
+
+```bash
+pip install docling-plugin-example
+```
+
+## Usage
+
+```python
+from docling_plugin_example import MyOcrOptions
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+
+pipeline_options = PdfPipelineOptions()
+pipeline_options.allow_external_plugins = True
+pipeline_options.ocr_options = MyOcrOptions(
+    api_key="your-key"
+)
+```
+
+## Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| api_key | str | Required | API key |
+| region | str | us-east-1 | Service region |
+
+## License
+
+MIT
+```
+
+## Plugin Examples
+
+Official Docling plugins:
+- [docling-core](https://github.com/docling-project/docling-core) - Core data structures
+- [docling-ibm-models](https://github.com/docling-project/docling-ibm-models) - IBM's layout models
+
+Community plugins:
+- Check [GitHub topics](https://github.com/topics/docling-plugin) for community-developed plugins
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Model Catalog" icon="book" href="/advanced/model-catalog">
+    Available models and engines
+  </Card>
+  <Card title="Enrichments" icon="sparkles" href="/advanced/enrichments">
+    Document enrichment features
+  </Card>
+  <Card title="Pipeline Options" icon="sliders" href="/api/options/pipeline-options">
+    Configure processing pipelines
+  </Card>
+  <Card title="Base Models" icon="code" href="https://github.com/docling-project/docling/blob/main/docling/models/">
+    Base model implementations
+  </Card>
+</CardGroup>

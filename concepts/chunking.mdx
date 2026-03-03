@@ -1,0 +1,487 @@
+---
+title: Chunking
+description: Chunking DoclingDocument for RAG and LLM applications
+---
+
+## Introduction
+
+Starting from a `DoclingDocument`, there are two possible approaches to chunking:
+
+1. **Export-then-chunk**: Export to Markdown (or similar format) and perform user-defined chunking as post-processing
+2. **Native chunking**: Use Docling's built-in chunkers that operate directly on `DoclingDocument`
+
+This page focuses on native Docling chunkers. For export-then-chunk examples, see the [RAG with LangChain recipe](../examples/rag_langchain.ipynb).
+
+<Note>
+Native chunking preserves document structure and metadata, making it ideal for RAG applications where context and provenance matter.
+</Note>
+
+## What is a Chunker?
+
+A *chunker* is a Docling abstraction that takes a `DoclingDocument` and returns a stream of chunks. Each chunk captures a portion of the document as text accompanied by metadata.
+
+Chunkers enable:
+- **Flexibility**: Customize chunking strategies for specific use cases
+- **Out-of-the-box utility**: Built-in implementations for common patterns
+- **Framework integration**: Easy integration with LlamaIndex, LangChain, etc.
+
+## Chunker Architecture
+
+### BaseChunker Interface
+
+All chunkers implement the `BaseChunker` base class:
+
+```python
+from docling_core.transforms.chunker.base import BaseChunker, BaseChunk
+from docling_core.types.doc import DoclingDocument
+from typing import Iterator
+
+class BaseChunker:
+    def chunk(self, dl_doc: DoclingDocument, **kwargs) -> Iterator[BaseChunk]:
+        """Return chunks for the provided document."""
+        pass
+    
+    def contextualize(self, chunk: BaseChunk) -> str:
+        """Return metadata-enriched serialization of the chunk.
+        
+        Typically used to feed an embedding model or generation model.
+        """
+        pass
+```
+
+### BaseChunk Structure
+
+Chunks returned by chunkers contain:
+
+- **`text`**: The chunk's text content
+- **`meta`**: Metadata about the chunk (headings, captions, page numbers, etc.)
+- **`path`**: Hierarchical path in the document structure
+
+```python
+from docling_core.transforms.chunker.base import BaseChunk, BaseMeta
+
+chunk: BaseChunk
+print(chunk.text)           # Main content
+print(chunk.meta.headings)  # Section headings
+print(chunk.meta.captions)  # Figure/table captions
+```
+
+## Accessing Chunkers
+
+Chunkers can be imported from either `docling` or `docling-core`:
+
+### From docling package
+
+```python
+from docling.chunking import HybridChunker, HierarchicalChunker
+```
+
+### From docling-core package
+
+If using only `docling-core`, install the chunking extra:
+
+```bash
+# For HuggingFace tokenizers
+pip install 'docling-core[chunking]'
+
+# For OpenAI tokenizers (tiktoken)
+pip install 'docling-core[chunking-openai]'
+```
+
+Then import:
+
+```python
+from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
+from docling_core.transforms.chunker.hierarchical_chunker import HierarchicalChunker
+```
+
+## Built-in Chunkers
+
+### HierarchicalChunker
+
+**Purpose**: Create one chunk per document element using document structure.
+
+**Implementation**: Uses the hierarchical structure from `DoclingDocument` to create chunks.
+
+**Features**:
+- One chunk per document element (paragraph, table, etc.)
+- Preserves hierarchy through metadata
+- Optionally merges list items into single chunks
+- Attaches headers and captions to chunks
+
+**Usage**:
+```python
+from docling.chunking import HierarchicalChunker
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+chunker = HierarchicalChunker(
+    merge_list_items=True  # Merge list items into single chunks (default: True)
+)
+
+for chunk in chunker.chunk(result.document):
+    print(f"Text: {chunk.text}")
+    print(f"Headings: {chunk.meta.headings}")
+    print(f"Page: {chunk.meta.page_no}")
+    print("-" * 80)
+```
+
+**Metadata included**:
+- Document headings (section hierarchy)
+- Table and figure captions
+- Page numbers
+- Hierarchical path in document structure
+
+**Best for**:
+- Preserving document structure
+- Fine-grained retrieval
+- When document elements naturally form semantic units
+
+### HybridChunker
+
+**Purpose**: Tokenization-aware chunking with hierarchical refinement.
+
+**Implementation**: Builds on `HierarchicalChunker` and applies token-based splitting and merging.
+
+**Features**:
+- Starts from hierarchical chunks
+- Splits oversized chunks based on token count
+- Merges undersized successive chunks with same headings/captions
+- Respects max/min token boundaries
+- Supports both HuggingFace and OpenAI tokenizers
+
+**Usage**:
+```python
+from docling.chunking import HybridChunker
+from docling.document_converter import DocumentConverter
+from transformers import AutoTokenizer
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+# Using HuggingFace tokenizer
+tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+
+chunker = HybridChunker(
+    tokenizer=tokenizer,
+    max_tokens=512,      # Maximum tokens per chunk
+    min_tokens=64,       # Minimum tokens (for merging)
+    merge_peers=True     # Merge successive chunks with same metadata
+)
+
+for chunk in chunker.chunk(result.document):
+    # Get contextualized text (with metadata)
+    context_text = chunker.contextualize(chunk)
+    
+    # Use for embedding
+    embedding = embed_model.encode(context_text)
+```
+
+**With OpenAI tokenizer**:
+```python
+import tiktoken
+
+tokenizer = tiktoken.encoding_for_model("gpt-3.5-turbo")
+
+chunker = HybridChunker(
+    tokenizer=tokenizer,
+    max_tokens=8000,
+    merge_peers=True
+)
+```
+
+**Chunking process**:
+
+<Steps>
+  <Step title="Hierarchical base">
+    Start with chunks from `HierarchicalChunker`
+  </Step>
+  
+  <Step title="Split oversized">
+    Split chunks exceeding `max_tokens` at natural boundaries
+  </Step>
+  
+  <Step title="Merge undersized">
+    Merge successive chunks below `min_tokens` if they share metadata
+  </Step>
+</Steps>
+
+**Best for**:
+- RAG applications with token-limited models
+- Balancing chunk size and context preservation
+- When embedding models have token limits
+
+## Contextualization
+
+The `contextualize()` method enriches chunk text with metadata:
+
+```python
+chunk = next(chunker.chunk(doc))
+
+# Plain text
+print(chunk.text)
+# Output: "The results show a 23% improvement."
+
+# Contextualized text
+context = chunker.contextualize(chunk)
+print(context)
+# Output:
+# """
+# ## Document Title
+# ### Section 2.1: Results
+# 
+# The results show a 23% improvement.
+# """
+```
+
+Contextualized text includes:
+- Document and section headings
+- Figure/table captions (if relevant)
+- Page numbers (if requested)
+
+This helps embedding models understand context and improves retrieval accuracy.
+
+## Chunk Metadata
+
+Chunks carry rich metadata for downstream applications:
+
+```python
+for chunk in chunker.chunk(doc):
+    meta = chunk.meta
+    
+    # Hierarchical headings
+    print(meta.headings)  # ["Title", "Section 1", "Subsection 1.1"]
+    
+    # Captions for figures/tables
+    print(meta.captions)  # ["Figure 1: Overview"]
+    
+    # Page number
+    print(meta.page_no)   # 5
+    
+    # Hierarchical path
+    print(chunk.path)     # "#/body/sections/0/subsections/1"
+```
+
+## Framework Integration
+
+### LlamaIndex Integration
+
+Docling chunkers work seamlessly with LlamaIndex through the `BaseChunker` interface:
+
+```python
+from docling.chunking import HybridChunker
+from docling.document_converter import DocumentConverter
+from llama_index.core import Document as LlamaDocument
+from llama_index.core import VectorStoreIndex
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+
+chunker = HybridChunker(tokenizer=tokenizer, max_tokens=512)
+
+# Convert Docling chunks to LlamaIndex documents
+llama_docs = []
+for chunk in chunker.chunk(result.document):
+    llama_doc = LlamaDocument(
+        text=chunker.contextualize(chunk),
+        metadata={
+            "headings": chunk.meta.headings,
+            "page": chunk.meta.page_no,
+        }
+    )
+    llama_docs.append(llama_doc)
+
+# Create index
+index = VectorStoreIndex.from_documents(llama_docs)
+```
+
+### Custom Chunkers
+
+Create custom chunkers for specialized needs:
+
+```python
+from docling_core.transforms.chunker.base import BaseChunker, BaseChunk, BaseMeta
+from docling_core.types.doc import DoclingDocument, TextItem
+from typing import Iterator
+
+class FixedSizeChunker(BaseChunker):
+    def __init__(self, chunk_size: int = 500):
+        self.chunk_size = chunk_size
+    
+    def chunk(self, dl_doc: DoclingDocument, **kwargs) -> Iterator[BaseChunk]:
+        buffer = []
+        current_size = 0
+        
+        for item, level in dl_doc.iterate_items():
+            if isinstance(item, TextItem):
+                text = item.text
+                buffer.append(text)
+                current_size += len(text)
+                
+                # Yield chunk when size exceeded
+                if current_size >= self.chunk_size:
+                    yield BaseChunk(
+                        text=" ".join(buffer),
+                        meta=BaseMeta()
+                    )
+                    buffer = []
+                    current_size = 0
+        
+        # Yield remaining
+        if buffer:
+            yield BaseChunk(
+                text=" ".join(buffer),
+                meta=BaseMeta()
+            )
+    
+    def contextualize(self, chunk: BaseChunk) -> str:
+        return chunk.text
+
+# Usage
+chunker = FixedSizeChunker(chunk_size=1000)
+for chunk in chunker.chunk(doc):
+    process(chunk)
+```
+
+## Advanced Usage
+
+### Filtering Chunks
+
+```python
+chunker = HybridChunker(tokenizer=tokenizer, max_tokens=512)
+
+# Only chunks from specific sections
+for chunk in chunker.chunk(doc):
+    if "Introduction" in chunk.meta.headings:
+        continue  # Skip introduction chunks
+    process(chunk)
+```
+
+### Adjusting Context Depth
+
+```python
+class CustomHybridChunker(HybridChunker):
+    def contextualize(self, chunk: BaseChunk) -> str:
+        # Custom contextualization with limited heading depth
+        headings = chunk.meta.headings[:2]  # Only top 2 levels
+        context_parts = [f"## {h}" for h in headings]
+        context_parts.append(chunk.text)
+        return "\n".join(context_parts)
+```
+
+### Combining with Serialization
+
+For complex workflows, combine chunking with custom serialization:
+
+```python
+from docling_core.transforms.serializer.markdown import MarkdownDocSerializer
+
+serializer = MarkdownDocSerializer(doc=doc)
+markdown, _ = serializer.serialize()
+
+# Now apply text-based chunking to markdown
+# Or use Docling chunkers for structure-aware chunking
+chunker = HybridChunker(tokenizer=tokenizer, max_tokens=512)
+for chunk in chunker.chunk(doc):
+    # Chunks preserve structure from DoclingDocument
+    process(chunk)
+```
+
+## Examples
+
+For detailed examples, see:
+
+- [Hybrid chunking notebook](../examples/hybrid_chunking.ipynb)
+- [Advanced chunking & serialization](../examples/advanced_chunking_and_serialization.ipynb)
+- [RAG with LangChain](../examples/rag_langchain.ipynb) (export-then-chunk approach)
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Choose chunker based on your use case">
+    - Use `HierarchicalChunker` when document structure is paramount
+    - Use `HybridChunker` for token-limited models (embeddings, LLMs)
+    - Create custom chunkers for specialized requirements
+  </Accordion>
+  
+  <Accordion title="Tune max_tokens for your model">
+    Set `max_tokens` based on your embedding model's limit. Common values:
+    - `512`: Sentence transformers (e.g., all-MiniLM-L6-v2)
+    - `8192`: OpenAI text-embedding-ada-002
+    - Check your model's documentation
+  </Accordion>
+  
+  <Accordion title="Use contextualize() for embeddings">
+    Always use `contextualize()` when generating embeddings to include metadata context:
+    ```python
+    embedding = model.encode(chunker.contextualize(chunk))
+    ```
+  </Accordion>
+  
+  <Accordion title="Preserve metadata for retrieval">
+    Store chunk metadata (headings, page numbers) in your vector database for:
+    - Better filtering during retrieval
+    - Improved result ranking
+    - Source attribution in generated responses
+  </Accordion>
+  
+  <Accordion title="Consider merge_peers for coherence">
+    Enable `merge_peers=True` in `HybridChunker` to merge small consecutive chunks with the same context, improving semantic coherence.
+  </Accordion>
+</AccordionGroup>
+
+## Performance Considerations
+
+### Tokenizer Selection
+
+Tokenizer choice affects performance:
+
+```python
+# HuggingFace tokenizers (generally faster for batch processing)
+from transformers import AutoTokenizer
+tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+
+# OpenAI tokenizers (accurate for OpenAI models)
+import tiktoken
+tokenizer = tiktoken.encoding_for_model("gpt-3.5-turbo")
+```
+
+### Batch Processing
+
+For large document sets, process in batches:
+
+```python
+converter = DocumentConverter()
+chunker = HybridChunker(tokenizer=tokenizer, max_tokens=512)
+
+all_chunks = []
+for doc_path in doc_paths:
+    result = converter.convert(doc_path)
+    chunks = list(chunker.chunk(result.document))
+    all_chunks.extend(chunks)
+
+# Batch embed all chunks
+embeddings = embed_model.encode([chunker.contextualize(c) for c in all_chunks])
+```
+
+## Related Topics
+
+<CardGroup cols={2}>
+  <Card title="DoclingDocument" icon="file-code" href="/concepts/docling-document">
+    Learn about the document representation being chunked
+  </Card>
+  
+  <Card title="Serialization" icon="file-export" href="/concepts/serialization">
+    Export documents before or after chunking
+  </Card>
+  
+  <Card title="Chunking Example" icon="code" href="/examples/chunking-serialization">
+    See chunking and serialization in action
+  </Card>
+  
+  <Card title="RAG Examples" icon="robot" href="/examples/rag-langchain">
+    Use chunks in RAG pipelines
+  </Card>
+</CardGroup>

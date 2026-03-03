@@ -1,0 +1,326 @@
+---
+title: More Integrations
+description: Explore additional Docling integrations across data processing, cloud platforms, and specialized tools
+---
+
+Beyond the major AI frameworks, Docling integrates with a rich ecosystem of tools and platforms for document processing, data preparation, knowledge graphs, and enterprise solutions.
+
+## Knowledge Graphs & Semantic AI
+
+### Semantica
+
+<img src="https://github.com/Hawksight-AI/semantica/raw/main/docs/assets/semantica-logo.png" alt="Semantica" width="200" />
+
+Docling is natively integrated with [Semantica](https://github.com/Hawksight-AI/semantica), an open-source framework for building semantic layers and knowledge graphs from unstructured data.
+
+By combining Docling's high-fidelity parsing with Semantica's knowledge engineering, you can transform complex documents into AI-ready, structured knowledge for GraphRAG and multi-agent systems.
+
+**Key Features:**
+- Native `DoclingParser` integration
+- Knowledge Graph & RDF Triplet construction
+- Entity normalization & deduplication
+- Automated ontology generation
+
+**Example:**
+```python
+from semantica.parse import DoclingParser
+from semantica.semantic_extract import TripletExtractor
+
+# Parse with Docling
+parser = DoclingParser(enable_ocr=True)
+result = parser.parse("earnings_call.pdf")
+
+# Extract semantic triplets
+extractor = TripletExtractor()
+triplets = extractor.extract_triplets(result["full_text"])
+```
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book" href="https://hawksight-ai.github.io/semantica/">
+    Semantica docs
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/Hawksight-AI/semantica">
+    Source code
+  </Card>
+  <Card title="Example" icon="code" href="https://github.com/Hawksight-AI/semantica/blob/main/cookbook/use_cases/finance/03_Earnings_Call_Analysis.ipynb">
+    Earnings analysis notebook
+  </Card>
+  <Card title="PyPI" icon="box" href="https://pypi.org/project/semantica/">
+    Install package
+  </Card>
+</CardGroup>
+
+---
+
+## Cloud Platforms
+
+### Apify
+
+<a href="https://apify.com/vancura/docling?fpr=docling"><img src="https://apify.com/ext/run-on-apify.png" alt="Run Docling Actor on Apify" width="176" /></a>
+
+Run Docling in the cloud without installation using the [Docling Actor](https://apify.com/vancura/docling?fpr=docling) on the Apify platform.
+
+**Example:**
+```bash
+apify call vancura/docling -i '{
+  "options": {
+    "to_formats": ["md", "json", "html", "text", "doctags"]
+  },
+  "http_sources": [
+    {"url": "https://arxiv.org/pdf/2408.09869"}
+  ]
+}'
+```
+
+**Benefits:**
+- No local installation required
+- Cloud-based processing
+- Multiple output formats
+- API and CLI access
+
+<CardGroup cols={2}>
+  <Card title="Run on Apify" icon="cloud" href="https://apify.com/vancura/docling?fpr=docling">
+    Docling Actor
+  </Card>
+  <Card title="Documentation" icon="book" href="https://github.com/docling-project/docling/tree/main/.actor/README.md">
+    Actor docs
+  </Card>
+</CardGroup>
+
+---
+
+## Performance & Optimization
+
+### Metaxy
+
+<a href="https://docs.metaxy.io/latest/">
+  <img src="https://docs.metaxy.io/latest/assets/metaxy.svg" alt="Metaxy" width="220" />
+</a>
+
+Combine Docling with [Metaxy](https://docs.metaxy.io/latest/), a framework for optimizing compute-intensive workloads.
+
+Teams can save compute costs while accelerating experimentation for multimodal and HPC-oriented document processing workloads.
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book" href="https://docs.metaxy.io/latest/">
+    Metaxy docs
+  </Card>
+  <Card title="Example" icon="code" href="https://github.com/ascii-supply-networks/dagster-slurm/blob/main/examples/projects/dagster-slurm-example-hpc-workload/dagster_slurm_example_hpc_workload/ray/process_documents_docling_metaxy.py">
+    Docling + Metaxy example
+  </Card>
+  <Card title="Walkthrough" icon="graduation-cap" href="https://georgheiler.com/2026/02/22/metaxy-dagster-slurm-multimodal/">
+    HPC walkthrough
+  </Card>
+  <Card title="Slides" icon="presentation" href="https://dagster-slurm.geoheil.com/slides-multimodal/index.html#/18?clicks=1">
+    Presentation
+  </Card>
+</CardGroup>
+
+---
+
+## Low-Code & Visual Platforms
+
+### Langflow
+
+Docling is available on [Langflow](https://www.langflow.org/), a visual low-code platform for building AI applications.
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book" href="https://docs.langflow.org/integrations-docling">
+    Langflow Docling docs
+  </Card>
+  <Card title="Video Tutorial" icon="play" href="https://www.youtube.com/watch?v=5DuS6uRI5OM">
+    Video guide
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/langflow-ai/langflow/">
+    Langflow repository
+  </Card>
+</CardGroup>
+
+### Kotaemon
+
+Docling is available in [Kotaemon](https://cinnamon.github.io/kotaemon/) as the `DoclingReader` loader for RAG applications.
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book" href="https://cinnamon.github.io/kotaemon/reference/loaders/docling_loader/">
+    DoclingReader docs
+  </Card>
+  <Card title="Setup Guide" icon="gear" href="https://cinnamon.github.io/kotaemon/development/?h=docling#setup-multimodal-document-parsing-ocr-table-parsing-figure-extraction">
+    Configuration
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/Cinnamon/kotaemon">
+    Kotaemon repository
+  </Card>
+</CardGroup>
+
+---
+
+## Data Processing & Preparation
+
+### Data Prep Kit
+
+Docling is used by the [Data Prep Kit](https://data-prep-kit.github.io/data-prep-kit/) for preparing unstructured data at scale, from laptop to datacenter.
+
+**Components:**
+- **PDF to Parquet** - Batch document conversion
+- **Document Chunking** - Intelligent text chunking
+
+<CardGroup cols={2}>
+  <Card title="PDF2Parquet" icon="file-arrow-down" href="https://data-prep-kit.github.io/data-prep-kit/transforms/language/pdf2parquet/">
+    PDF ingestion docs
+  </Card>
+  <Card title="Doc Chunking" icon="scissors" href="https://data-prep-kit.github.io/data-prep-kit/transforms/language/doc_chunk/">
+    Chunking docs
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/data-prep-kit/data-prep-kit">
+    Data Prep Kit repository
+  </Card>
+</CardGroup>
+
+---
+
+## NLP & Text Processing
+
+### spaCy Layout
+
+Docling is available in [spaCy](https://spacy.io/) as the **spaCy Layout** plugin for NLP pipelines.
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book" href="https://github.com/explosion/spacy-layout?tab=readme-ov-file#readme">
+    SpacyLayout docs
+  </Card>
+  <Card title="Blog Post" icon="newspaper" href="https://explosion.ai/blog/pdfs-nlp-structured-data">
+    Announcement
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/explosion/spacy-layout">
+    Source code
+  </Card>
+  <Card title="PyPI" icon="box" href="https://pypi.org/project/spacy-layout/">
+    Install package
+  </Card>
+</CardGroup>
+
+### txtai
+
+Docling is available as a text extraction backend for [txtai](https://neuml.github.io/txtai/).
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book" href="https://neuml.github.io/txtai">
+    txtai docs
+  </Card>
+  <Card title="Integration" icon="plug" href="https://neuml.github.io/txtai/pipeline/data/filetohtml/#docling">
+    Docling backend
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/neuml/txtai">
+    txtai repository
+  </Card>
+</CardGroup>
+
+---
+
+## Annotation & Labeling
+
+### Prodigy
+
+Docling is available in [Prodigy](https://prodi.gy/) as a Prodigy-PDF plugin recipe for document annotation.
+
+<CardGroup cols={2}>
+  <Card title="Prodigy Home" icon="home" href="https://prodi.gy/">
+    Prodigy platform
+  </Card>
+  <Card title="PDF Plugin" icon="plug" href="https://prodi.gy/docs/plugins#pdf">
+    Plugin docs
+  </Card>
+  <Card title="Recipe" icon="book" href="https://prodi.gy/docs/plugins#pdf-spans.manual">
+    pdf-spans.manual recipe
+  </Card>
+  <Card title="Blog Post" icon="newspaper" href="https://explosion.ai/blog/pdfs-nlp-structured-data">
+    Announcement
+  </Card>
+</CardGroup>
+
+---
+
+## Enterprise & AI Platforms
+
+### InstructLab
+
+Docling powers document processing in [InstructLab](https://instructlab.ai), enabling knowledge extraction for AI model fine-tuning.
+
+<CardGroup cols={2}>
+  <Card title="InstructLab Home" icon="home" href="https://instructlab.ai">
+    Platform overview
+  </Card>
+  <Card title="Documentation" icon="book" href="https://docs.instructlab.ai/">
+    InstructLab docs
+  </Card>
+  <Card title="UI" icon="desktop" href="https://ui.instructlab.ai/">
+    InstructLab UI
+  </Card>
+  <Card title="Blog Post" icon="newspaper" href="https://www.redhat.com/en/blog/docling-missing-document-processing-companion-generative-ai">
+    Red Hat announcement
+  </Card>
+</CardGroup>
+
+### NVIDIA AI Blueprints
+
+Docling powers NVIDIA's **PDF to Podcast** agentic AI blueprint.
+
+<CardGroup cols={2}>
+  <Card title="Blueprint" icon="blueprint" href="https://build.nvidia.com/nvidia/pdf-to-podcast">
+    PDF to Podcast
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/NVIDIA-AI-Blueprints/pdf-to-podcast">
+    Source code
+  </Card>
+  <Card title="Announcement" icon="bullhorn" href="https://nvidianews.nvidia.com/news/nvidia-launches-ai-foundation-models-for-rtx-ai-pcs">
+    NVIDIA News
+  </Card>
+  <Card title="Blog" icon="newspaper" href="https://blogs.nvidia.com/blog/agentic-ai-blueprints/">
+    Agentic AI blog
+  </Card>
+</CardGroup>
+
+---
+
+## Additional Integrations
+
+Docling is also used in:
+
+- **Red Hat AI** - Enterprise AI platform
+- **Cloudera** - Enterprise data platform
+- **Quarkus** - Java framework integration
+- **Bee Agent** - Agent framework
+- **Arconia** - Document platform
+- **DocETL** - Document ETL pipelines
+- **Hector** - Document processing
+- **OpenContracts** - Contract analysis
+- **OpenWebUI** - Web interface
+- **Vectara** - Neural search platform
+
+For the complete list of integrations, visit the [Docling integrations directory](https://github.com/docling-project/docling/tree/main/docs/integrations).
+
+## Integration Ecosystem
+
+Docling's rich integration ecosystem enables:
+
+<Steps>
+  <Step title="Flexible Deployment">
+    Use Docling locally, in the cloud, or at datacenter scale
+  </Step>
+  <Step title="Framework Choice">
+    Work with your preferred AI framework or platform
+  </Step>
+  <Step title="Specialized Workflows">
+    Leverage domain-specific tools for your use case
+  </Step>
+  <Step title="Production Ready">
+    Deploy with enterprise-grade platforms and tools
+  </Step>
+</Steps>
+
+## Next Steps
+
+- Explore [core integrations](/integrations/overview)
+- Learn about [document conversion](../usage/conversion)
+- Check out [example applications](../examples/overview)
+- Visit the [Docling GitHub](https://github.com/docling-project/docling) for the latest integrations

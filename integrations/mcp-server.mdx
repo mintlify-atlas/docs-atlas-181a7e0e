@@ -1,0 +1,275 @@
+---
+title: MCP Server
+description: Use Docling's Model Context Protocol server to integrate document processing into AI agents and agentic applications
+---
+
+Docling provides an MCP (Model Context Protocol) server that enables seamless integration of document processing capabilities into AI agents and agentic applications.
+
+## Overview
+
+The [Model Context Protocol](https://modelcontextprotocol.io) (MCP) is a standard for connecting AI applications to external tools. Docling's MCP server allows AI agents to:
+
+- Process documents on-demand through a standard protocol
+- Extract text, tables, and structure from various document formats
+- Integrate document understanding into autonomous agent workflows
+- Work with any MCP-compatible client or framework
+
+## Installation
+
+The Docling MCP server can be installed using `uvx`:
+
+```bash
+uvx --from=docling-mcp docling-mcp-server
+```
+
+## Quick Start
+
+### Configuration
+
+Add Docling MCP to your MCP client configuration:
+
+```json
+{
+  "mcpServers": {
+    "docling": {
+      "command": "uvx",
+      "args": [
+        "--from=docling-mcp",
+        "docling-mcp-server"
+      ]
+    }
+  }
+}
+```
+
+### Claude Desktop Integration
+
+For [Claude Desktop](https://claude.ai/download), edit your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "docling": {
+      "command": "uvx",
+      "args": [
+        "--from=docling-mcp",
+        "docling-mcp-server"
+      ]
+    }
+  }
+}
+```
+
+The config file is located at:
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+### LM Studio Integration
+
+For [LM Studio](https://lmstudio.ai/), edit the `mcp.json` file or click the button below:
+
+[![Add MCP Server docling to LM Studio](https://files.lmstudio.ai/deeplink/mcp-install-light.svg)](https://lmstudio.ai/install-mcp?name=docling&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyItLWZyb209ZG9jbGluZy1tY3AiLCJkb2NsaW5nLW1jcC1zZXJ2ZXIiXX0%3D)
+
+## Supported Clients
+
+<CardGroup cols={2}>
+  <Card title="Claude Desktop" icon="robot">
+    Anthropic's desktop AI assistant
+  </Card>
+  <Card title="LM Studio" icon="desktop">
+    Local LLM development environment
+  </Card>
+  <Card title="LlamaIndex" icon="llama">
+    Data framework for LLM applications
+  </Card>
+  <Card title="Pydantic AI" icon="python">
+    Type-safe AI agent framework
+  </Card>
+</CardGroup>
+
+## Framework Integration
+
+Docling MCP provides specialized tools for various frameworks:
+
+### LlamaIndex Agents
+
+```python
+from llama_index.agent import Agent
+from docling_mcp import DoclingMCPTool
+
+# Create agent with Docling MCP tool
+tool = DoclingMCPTool()
+agent = Agent.from_tools([tool])
+
+# Use the agent
+response = agent.query(
+    "Extract the key findings from report.pdf"
+)
+print(response)
+```
+
+### Pydantic AI Agents
+
+```python
+from pydantic_ai import Agent
+from docling_mcp import DoclingMCPTool
+
+# Create type-safe agent
+agent = Agent(
+    tools=[DoclingMCPTool()],
+    model="openai:gpt-4"
+)
+
+# Process documents
+result = agent.run(
+    "Summarize the contents of document.pdf"
+)
+```
+
+### Llama Stack
+
+```python
+from llama_stack import Agent
+from docling_mcp import DoclingMCPTool
+
+agent = Agent(
+    tools=[DoclingMCPTool()]
+)
+
+response = agent.run(
+    "What are the main topics in the presentation.pptx?"
+)
+```
+
+### smolagents
+
+```python
+from smolagents import Agent
+from docling_mcp import DoclingMCPTool
+
+agent = Agent(
+    tools=[DoclingMCPTool()],
+    model="gpt-4"
+)
+
+result = agent.run(
+    "Extract tables from financial_report.pdf"
+)
+```
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="Standard Protocol" icon="plug">
+    Implements MCP standard for broad compatibility
+  </Card>
+  <Card title="Framework Support" icon="cubes">
+    Works with LlamaIndex, Pydantic AI, and more
+  </Card>
+  <Card title="Document Processing" icon="file-lines">
+    Full Docling capabilities via agent tools
+  </Card>
+  <Card title="Easy Setup" icon="bolt">
+    Simple configuration for any MCP client
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+<Steps>
+  <Step title="Conversational Document Analysis">
+    Enable AI assistants to read and analyze documents in conversations
+  </Step>
+  <Step title="Autonomous Research">
+    Let agents autonomously process and extract information from documents
+  </Step>
+  <Step title="Document-Grounded Responses">
+    Provide agents with document understanding for accurate responses
+  </Step>
+  <Step title="Multi-Step Workflows">
+    Chain document processing with other agent capabilities
+  </Step>
+</Steps>
+
+## Example Agent Workflow
+
+```python
+from pydantic_ai import Agent
+from docling_mcp import DoclingMCPTool
+
+# Create agent with document processing capability
+agent = Agent(
+    tools=[DoclingMCPTool()],
+    model="openai:gpt-4",
+    system_prompt="""You are a research assistant that can read and analyze documents.
+    When asked about documents, use the Docling tool to extract their contents."""
+)
+
+# Multi-step workflow
+workflow = """
+1. Read the quarterly_report.pdf
+2. Extract all financial tables
+3. Summarize the key metrics
+4. Compare with last quarter's results from q3_report.pdf
+"""
+
+result = agent.run(workflow)
+print(result)
+```
+
+## Advanced Configuration
+
+Customize the MCP server configuration:
+
+```json
+{
+  "mcpServers": {
+    "docling": {
+      "command": "uvx",
+      "args": [
+        "--from=docling-mcp",
+        "docling-mcp-server"
+      ],
+      "env": {
+        "DOCLING_OCR": "true",
+        "DOCLING_TABLE_STRUCTURE": "true"
+      }
+    }
+  }
+}
+```
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="GitHub" icon="github" href="https://github.com/docling-project/docling-mcp">
+    Docling MCP repository
+  </Card>
+  <Card title="MCP Protocol" icon="book" href="https://modelcontextprotocol.io">
+    Model Context Protocol docs
+  </Card>
+  <Card title="Examples" icon="code" href="https://github.com/docling-project/docling-mcp/tree/main/examples">
+    Framework examples
+  </Card>
+  <Card title="Configuration" icon="gear" href="https://github.com/docling-project/docling-mcp/blob/main/docs/integrations/claude_desktop_config.json">
+    Example configurations
+  </Card>
+</CardGroup>
+
+## Supported Frameworks
+
+Docling MCP includes examples for:
+
+- **LlamaIndex** - Data framework for LLM applications
+- **Llama Stack** - Comprehensive LLM development stack
+- **Pydantic AI** - Type-safe agent development
+- **smolagents** - Lightweight agent framework by Hugging Face
+
+Visit the [Docling MCP repository](https://github.com/docling-project/docling-mcp) for detailed examples and integration guides.
+
+## Next Steps
+
+- Explore [MCP protocol documentation](https://modelcontextprotocol.io)
+- Check out [framework examples](https://github.com/docling-project/docling-mcp/tree/main/examples)
+- Learn about [document processing options](../usage/conversion)
+- Build your first [agentic application](https://github.com/docling-project/docling-mcp)

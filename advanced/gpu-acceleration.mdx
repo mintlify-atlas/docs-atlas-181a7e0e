@@ -1,0 +1,577 @@
+---
+title: GPU Acceleration
+description: Configure GPU acceleration for faster document processing with CUDA, MPS, and XPU support
+---
+
+## Overview
+
+Docling supports GPU acceleration for significantly faster document processing. This guide covers:
+
+- Device configuration (CUDA, MPS, XPU)
+- Standard pipeline GPU optimization
+- VLM pipeline GPU acceleration with inference servers
+- Performance benchmarks and best practices
+
+<Note>
+GPU acceleration strategies are actively being improved. Check this guide regularly for updates.
+</Note>
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:1
+
+## Supported Devices
+
+**Source**: ~/workspace/source/docling/datamodel/accelerator_options.py:14
+
+Docling supports multiple hardware accelerators:
+
+| Device | Description | Platform |
+|--------|-------------|----------|
+| `auto` | Automatic detection (recommended) | All |
+| `cpu` | CPU-only processing | All |
+| `cuda` | NVIDIA GPUs | Linux, Windows |
+| `cuda:N` | Specific NVIDIA GPU (e.g., `cuda:0`) | Linux, Windows |
+| `mps` | Apple Silicon GPU | macOS |
+| `xpu` | Intel GPUs | Linux |
+
+## Accelerator Configuration
+
+### Basic Setup
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:16
+
+```python
+from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+
+# Automatic device selection (recommended)
+accelerator_options = AcceleratorOptions(
+    device=AcceleratorDevice.AUTO
+)
+
+# Explicit CUDA device
+accelerator_options = AcceleratorOptions(
+    device=AcceleratorDevice.CUDA
+)
+
+# Specific GPU selection
+accelerator_options = AcceleratorOptions(
+    device="cuda:1"  # Use second GPU
+)
+```
+
+### Configuration Options
+
+**Source**: ~/workspace/source/docling/datamodel/accelerator_options.py:23
+
+```python
+class AcceleratorOptions(BaseSettings):
+    num_threads: int = 4
+    device: Union[str, AcceleratorDevice] = "auto"
+    cuda_use_flash_attention2: bool = False
+```
+
+#### num_threads
+
+**Number of CPU threads for model inference**
+
+- Higher values improve throughput on multi-core systems
+- May increase memory usage
+- **Recommended**: Number of physical CPU cores
+- Can be set via `DOCLING_NUM_THREADS` or `OMP_NUM_THREADS` environment variables
+
+```python
+accelerator_options = AcceleratorOptions(
+    num_threads=8  # Use 8 CPU threads
+)
+
+# Or via environment variable
+import os
+os.environ["DOCLING_NUM_THREADS"] = "8"
+```
+
+**Source**: ~/workspace/source/docling/datamodel/accelerator_options.py:32
+
+#### device
+
+**Hardware device for model inference**
+
+- `auto`: Automatic detection (selects best available)
+- `cpu`: CPU-only processing
+- `cuda`: NVIDIA GPU (default device)
+- `cuda:N`: Specific NVIDIA GPU
+- `mps`: Apple Silicon GPU
+- `xpu`: Intel GPU
+
+```python
+# Environment variable configuration
+import os
+os.environ["DOCLING_DEVICE"] = "cuda:0"
+
+accelerator_options = AcceleratorOptions()  # Reads from env
+```
+
+**Source**: ~/workspace/source/docling/datamodel/accelerator_options.py:44
+
+#### cuda_use_flash_attention2
+
+**Enable Flash Attention 2 optimization for CUDA**
+
+- Significant speedup and memory reduction for transformer models
+- Requires NVIDIA Ampere GPUs or newer (RTX 30XX+, A100, H100, etc.)
+- Requires `flash-attn` package installation
+- Only applicable to VLM models using transformers
+
+```python
+accelerator_options = AcceleratorOptions(
+    device=AcceleratorDevice.CUDA,
+    cuda_use_flash_attention2=True
+)
+
+# Or via environment variable
+os.environ["DOCLING_CUDA_USE_FLASH_ATTENTION2"] = "true"
+```
+
+**Source**: ~/workspace/source/docling/datamodel/accelerator_options.py:56
+
+<Warning>
+Flash Attention 2 requires compatible hardware and additional dependencies. Install with:
+```bash
+pip install flash-attn
+```
+</Warning>
+
+## Standard Pipeline GPU Acceleration
+
+### Configuration
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:13
+
+```python
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.accelerator_options import (
+    AcceleratorDevice,
+    AcceleratorOptions
+)
+from docling.datamodel.pipeline_options import ThreadedPdfPipelineOptions
+
+# Configure GPU acceleration
+accelerator_options = AcceleratorOptions(
+    device=AcceleratorDevice.CUDA,  # or AUTO
+)
+
+# Configure batch sizes for GPU
+pipeline_options = ThreadedPdfPipelineOptions(
+    accelerator_options=accelerator_options,
+    ocr_batch_size=64,      # default: 4
+    layout_batch_size=64,   # default: 4
+    table_batch_size=4,     # currently not using GPU batching
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_options=pipeline_options
+        )
+    }
+)
+
+result = converter.convert("document.pdf")
+```
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:26
+
+### Batch Size Tuning
+
+Higher batch sizes enable GPU batch inference mode for better throughput:
+
+```python
+pipeline_options = ThreadedPdfPipelineOptions(
+    ocr_batch_size=64,      # OCR model batch size
+    layout_batch_size=64,   # Layout detection batch size
+    table_batch_size=4,     # Table structure (limited GPU support)
+)
+```
+
+<Tip>
+Start with batch size 32-64 and adjust based on your GPU memory. Monitor GPU utilization with `nvidia-smi` (CUDA) or Activity Monitor (macOS).
+</Tip>
+
+### OCR GPU Acceleration
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:46
+
+OCR GPU support depends on the engine:
+
+```python
+from docling.datamodel.pipeline_options import (
+    ThreadedPdfPipelineOptions,
+    RapidOcrOptions
+)
+
+pipeline_options = ThreadedPdfPipelineOptions()
+
+# RapidOCR with torch backend supports GPU
+pipeline_options.ocr_options = RapidOcrOptions(
+    backend="torch",  # GPU-accelerated backend
+)
+```
+
+<Note>
+Currently, only RapidOCR with the torch backend is known to support GPU acceleration. Other OCR engines rely on third-party libraries with varying GPU support.
+
+See [GitHub discussion #2451](https://github.com/docling-project/docling/discussions/2451) for details.
+</Note>
+
+### Complete Example
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:44
+
+For a complete working example, see:
+```bash
+python examples/gpu_standard_pipeline.py
+```
+
+## VLM Pipeline GPU Acceleration
+
+### Inference Server Setup
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:62
+
+For optimal GPU utilization with VLM pipelines, use a local inference server:
+
+#### Supported Servers
+
+| Server | Platform | Endpoint |
+|--------|----------|----------|
+| [vLLM](https://docs.vllm.ai/) | Linux only | `http://localhost:8000/v1/chat/completions` |
+| [LM Studio](https://lmstudio.ai/) | Linux, Windows, macOS | `http://localhost:1234/v1/chat/completions` |
+| [Ollama](https://ollama.com/) | Linux, Windows, macOS | `http://localhost:11434/v1/chat/completions` |
+
+#### Starting vLLM (Linux)
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:71
+
+Optimized parameters for Granite Docling:
+
+```bash
+vllm serve ibm-granite/granite-docling-258M \
+  --host 127.0.0.1 --port 8000 \
+  --max-num-seqs 512 \
+  --max-num-batched-tokens 8192 \
+  --enable-chunked-prefill \
+  --gpu-memory-utilization 0.9
+```
+
+### Docling VLM Configuration
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:84
+
+```python
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import VlmPipelineOptions
+from docling.datamodel.settings import settings
+
+# Configure VLM options
+vlm_options = VlmPipelineOptions(
+    enable_remote_services=True,
+    vlm_options={
+        "url": "http://localhost:8000/v1/chat/completions",
+        "params": {
+            "model": "ibm-granite/granite-docling-258M",
+            "max_tokens": 4096,
+        },
+        "concurrency": 64,  # default: 1
+        "prompt": "Convert this page to docling.",
+        "timeout": 90,
+    }
+)
+
+# IMPORTANT: Set page_batch_size >= concurrency
+settings.perf.page_batch_size = 64  # default: 4
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_options=vlm_options
+        )
+    }
+)
+
+result = converter.convert("document.pdf")
+```
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:106
+
+<Warning>
+**Critical**: Ensure `settings.perf.page_batch_size >= vlm_options.concurrency` for optimal performance.
+</Warning>
+
+### Complete Example
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:114
+
+For a complete working example:
+```bash
+python examples/gpu_vlm_pipeline.py
+```
+
+## Performance Benchmarks
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:127
+
+### Test Infrastructure
+
+| System | CPU | RAM | GPU |
+|--------|-----|-----|-----|
+| AWS g6e.2xlarge | 8 vCPUs AMD EPYC 7R13 | 64GB | NVIDIA L40S 48GB |
+| Linux RTX 5090 | 16 vCPU AMD Ryzen 7 9800 | 128GB | NVIDIA RTX 5090 |
+| Windows RTX 5070 | 16 vCPU AMD Ryzen 7 9800 | 64GB | NVIDIA RTX 5070 |
+
+All systems: CUDA 13.0
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:139
+
+### Test Data
+
+| Dataset | Documents | Pages | Tables | Format |
+|---------|-----------|-------|--------|--------|
+| PDF doc | 1 | 192 | 95 | PDF |
+| ViDoRe V3 HR | 14 | 1,110 | 258 | Parquet (images) |
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:129
+
+### Results
+
+**Source**: ~/workspace/source/docs/usage/gpu.md:152
+
+#### Standard Pipeline (No OCR)
+
+| System | PDF doc | ViDoRe V3 HR |
+|--------|---------|-------------|
+| g6e.2xlarge | 3.1 pages/second | - |
+| RTX 5090 | **7.9 pages/second** | - |
+| RTX 5090 (CPU-only*) | 1.5 pages/second | - |
+| RTX 5070 | 4.2 pages/second | - |
+| RTX 5070 (CPU-only*) | 1.2 pages/second | - |
+
+*CPU-only timing with 16 PyTorch threads*
+
+#### Standard Pipeline (With OCR)
+
+| System | PDF doc | ViDoRe V3 HR |
+|--------|---------|-------------|
+| RTX 5090 | TBA | 1.6 pages/second |
+| RTX 5070 | TBA | 1.1 pages/second |
+
+#### VLM Pipeline (Granite Docling)
+
+| System | PDF doc | ViDoRe V3 HR |
+|--------|---------|-------------|
+| g6e.2xlarge | 2.4 pages/second | - |
+| RTX 5090 | 3.8 pages/second | **3.6-4.5 pages/second** |
+| RTX 5070 | 2.0 pages/second | 2.8-3.2 pages/second |
+
+### Performance Insights
+
+<AccordionGroup>
+  <Accordion title="GPU vs CPU Speedup">
+    GPU acceleration provides:
+    - **5-6x speedup** for standard pipeline (RTX 5090 vs CPU-only)
+    - **3-4x speedup** for RTX 5070 vs CPU-only
+    - Larger speedups on newer/faster GPUs
+  </Accordion>
+
+  <Accordion title="VLM Performance">
+    - VLM pipeline benefits significantly from inference servers
+    - Concurrency settings critical for GPU utilization
+    - RTX 5090 achieves 3.6-4.5 pages/second on complex datasets
+  </Accordion>
+
+  <Accordion title="OCR Impact">
+    - OCR adds processing time but improves text extraction
+    - GPU-accelerated OCR (RapidOCR torch) recommended
+    - Consider OCR necessity for your use case
+  </Accordion>
+</AccordionGroup>
+
+## Optimization Tips
+
+<CardGroup cols={2}>
+  <Card title="Batch Size" icon="layer-group">
+    Increase batch sizes to maximize GPU utilization:
+    ```python
+    layout_batch_size=64
+    ocr_batch_size=64
+    ```
+  </Card>
+  
+  <Card title="Concurrency" icon="bolt">
+    For VLM pipelines, set high concurrency:
+    ```python
+    vlm_options={"concurrency": 64}
+    settings.perf.page_batch_size = 64
+    ```
+  </Card>
+  
+  <Card title="Memory Management" icon="memory">
+    Monitor GPU memory usage:
+    ```bash
+    # NVIDIA
+    nvidia-smi
+    
+    # AMD
+    rocm-smi
+    ```
+  </Card>
+  
+  <Card title="Device Selection" icon="microchip">
+    Use AUTO for automatic device selection:
+    ```python
+    device=AcceleratorDevice.AUTO
+    ```
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="CUDA Out of Memory">
+    **Problem**: GPU runs out of memory
+    
+    **Solutions**:
+    - Reduce batch sizes: `layout_batch_size=32`
+    - Use smaller models
+    - Process fewer pages at once
+    - Close other GPU-using applications
+    
+    ```python
+    pipeline_options = ThreadedPdfPipelineOptions(
+        layout_batch_size=32,  # Reduce from 64
+        ocr_batch_size=32,
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="GPU Not Being Used">
+    **Problem**: Processing runs on CPU despite GPU configuration
+    
+    **Checks**:
+    1. Verify CUDA installation: `python -c "import torch; print(torch.cuda.is_available())"`
+    2. Check device configuration: `print(accelerator_options.device)`
+    3. Monitor GPU usage: `nvidia-smi`
+    4. Ensure correct PyTorch version with CUDA support
+    
+    ```bash
+    # Install PyTorch with CUDA 12.1
+    pip install torch --index-url https://download.pytorch.org/whl/cu121
+    ```
+  </Accordion>
+
+  <Accordion title="Slow VLM Performance">
+    **Problem**: VLM pipeline slower than expected
+    
+    **Checks**:
+    - Verify inference server is running and accessible
+    - Ensure `page_batch_size >= concurrency`
+    - Check server GPU utilization
+    - Increase concurrency if GPU underutilized
+    
+    ```python
+    # Verify settings
+    print(f"Concurrency: {vlm_options.vlm_options['concurrency']}")
+    print(f"Page batch size: {settings.perf.page_batch_size}")
+    ```
+  </Accordion>
+
+  <Accordion title="Apple Silicon (MPS) Issues">
+    **Problem**: MPS acceleration not working or causing errors
+    
+    **Solutions**:
+    - Ensure macOS 12.3 or later
+    - Check PyTorch MPS support: `python -c "import torch; print(torch.backends.mps.is_available())"`
+    - Some models may not fully support MPS (fallback to CPU)
+    - Use `device=AcceleratorDevice.AUTO` for automatic fallback
+    
+    ```python
+    accelerator_options = AcceleratorOptions(
+        device=AcceleratorDevice.MPS
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Flash Attention 2 Installation">
+    **Problem**: Flash Attention 2 fails to install or import
+    
+    **Requirements**:
+    - NVIDIA Ampere GPU or newer (compute capability >= 8.0)
+    - CUDA 11.8 or later
+    - PyTorch 2.0 or later
+    
+    **Installation**:
+    ```bash
+    pip install flash-attn --no-build-isolation
+    ```
+    
+    If installation fails, disable Flash Attention:
+    ```python
+    accelerator_options = AcceleratorOptions(
+        cuda_use_flash_attention2=False
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Platform-Specific Notes
+
+### Linux
+
+- Best GPU support across all devices (CUDA, XPU)
+- vLLM inference server available
+- Recommended platform for production GPU acceleration
+
+```bash
+# Check CUDA availability
+nvidia-smi
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
+### Windows
+
+- CUDA support available
+- LM Studio and Ollama inference servers supported
+- vLLM not available (Linux-only)
+
+```powershell
+# Check CUDA availability
+nvidia-smi
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
+### macOS
+
+- Apple Silicon (M1/M2/M3) GPU via MPS
+- LM Studio and Ollama inference servers supported
+- Limited model support compared to CUDA
+
+```bash
+# Check MPS availability
+python -c "import torch; print(torch.backends.mps.is_available())"
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Model Catalog" icon="book" href="/advanced/model-catalog">
+    GPU-compatible models and engines
+  </Card>
+  <Card title="Pipeline Options" icon="sliders" href="/api/options/pipeline-options">
+    Configure batch sizes and concurrency
+  </Card>
+  <Card title="VLM Pipeline" icon="brain" href="/api/pipelines/vlm">
+    Vision-language model pipeline details
+  </Card>
+  <Card title="Performance Tuning" icon="gauge" href="/guides/advanced-options">
+    Optimize processing performance
+  </Card>
+</CardGroup>

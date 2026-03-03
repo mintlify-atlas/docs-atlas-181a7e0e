@@ -1,0 +1,556 @@
+---
+title: Document Enrichments
+description: Enhance documents with code understanding, formula extraction, picture classification, and image descriptions
+---
+
+## Overview
+
+Docling provides enrichment features that enhance converted documents with additional metadata and structured information. Enrichments process specific document components using specialized models:
+
+- **Code Understanding**: Parse and extract code blocks with language detection
+- **Formula Understanding**: Extract LaTeX representations from mathematical formulas
+- **Picture Classification**: Classify images into semantic categories
+- **Picture Description**: Generate natural language descriptions for images
+
+<Warning>
+Enrichment steps require additional model executions and significantly increase processing time. Most enrichments are **disabled by default**.
+</Warning>
+
+## Available Enrichments
+
+| Feature | Parameter | Processed Item | Model |
+|---------|-----------|----------------|-------|
+| Code Understanding | `do_code_enrichment` | `CodeItem` | CodeFormulaV2 |
+| Formula Understanding | `do_formula_enrichment` | `TextItem` (FORMULA label) | CodeFormulaV2 |
+| Picture Classification | `do_picture_classification` | `PictureItem` | DocumentFigureClassifier |
+| Picture Description | `do_picture_description` | `PictureItem` | SmolVLM / Granite Vision |
+
+**Source**: ~/workspace/source/docs/usage/enrichments.md:7
+
+## Code Understanding
+
+### Overview
+
+The code understanding enrichment:
+- Parses code blocks found in documents
+- Detects programming language automatically
+- Sets the `code_language` property on `CodeItem` elements
+- Enables syntax-aware processing
+
+**Model**: [CodeFormula](https://huggingface.co/ds4sd/CodeFormula)
+
+### Usage
+
+<CodeGroup>
+```python Python API
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+
+pipeline_options = PdfPipelineOptions()
+pipeline_options.do_code_enrichment = True
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_options=pipeline_options
+        )
+    }
+)
+
+result = converter.convert("document.pdf")
+doc = result.document
+
+# Access enriched code items
+for item, level in doc.iterate_items():
+    if isinstance(item, CodeItem):
+        print(f"Language: {item.code_language}")
+        print(f"Code: {item.text}")
+```
+
+```bash CLI
+docling --enrich-code document.pdf
+```
+</CodeGroup>
+
+**Source**: ~/workspace/source/docs/usage/enrichments.md:18
+
+### Example Output
+
+```python
+# Detected code block
+code_item.code_language  # "python"
+code_item.text           # "def hello():\n    print('Hello')\n"
+```
+
+## Formula Understanding
+
+### Overview
+
+The formula understanding enrichment:
+- Analyzes mathematical equations in documents
+- Extracts LaTeX representation
+- Enables MathML rendering in HTML exports
+- Preserves mathematical semantics
+
+**Model**: [CodeFormula](https://huggingface.co/ds4sd/CodeFormula)
+
+### Usage
+
+<CodeGroup>
+```python Python API
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+
+pipeline_options = PdfPipelineOptions()
+pipeline_options.do_formula_enrichment = True
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_options=pipeline_options
+        )
+    }
+)
+
+result = converter.convert("math_paper.pdf")
+doc = result.document
+
+# Export with MathML rendering
+html = doc.export_to_html()
+```
+
+```bash CLI
+docling --enrich-formula document.pdf
+```
+</CodeGroup>
+
+**Source**: ~/workspace/source/docs/usage/enrichments.md:48
+
+### Example Output
+
+```python
+# Formula with LaTeX
+text_item.label          # "FORMULA"
+text_item.text           # Original formula text
+text_item.enriched_data  # {"latex": "E = mc^2"}
+```
+
+## Picture Classification
+
+### Overview
+
+The picture classification enrichment:
+- Classifies images into semantic categories
+- Specialized for document imagery
+- Detects charts, diagrams, logos, signatures, etc.
+- Adds classification metadata to `PictureItem` elements
+
+**Model**: [DocumentFigureClassifier v2.0](https://huggingface.co/ds4sd/DocumentFigureClassifier)
+
+### Supported Classes
+
+- Chart types (bar, line, pie, scatter, etc.)
+- Diagrams and flowcharts
+- Natural images and photographs
+- Logos and branding elements
+- Signatures
+- Technical illustrations
+
+### Usage
+
+<CodeGroup>
+```python Python API
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+
+pipeline_options = PdfPipelineOptions()
+pipeline_options.generate_picture_images = True  # Required
+pipeline_options.images_scale = 2  # Higher quality for classification
+pipeline_options.do_picture_classification = True
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_options=pipeline_options
+        )
+    }
+)
+
+result = converter.convert("document.pdf")
+doc = result.document
+
+# Access classified pictures
+for item, level in doc.iterate_items():
+    if isinstance(item, PictureItem):
+        print(f"Classification: {item.classification}")
+        print(f"Confidence: {item.classification_confidence}")
+```
+
+```bash CLI
+docling --enrich-picture-classes document.pdf
+```
+</CodeGroup>
+
+**Source**: ~/workspace/source/docs/usage/enrichments.md:80
+
+<Note>
+**Important**: You must enable `generate_picture_images=True` for picture classification to work.
+</Note>
+
+## Picture Description
+
+### Overview
+
+The picture description enrichment:
+- Generates natural language descriptions (captions)
+- Uses vision-language models (VLMs)
+- Supports both local and remote models
+- Customizable prompts for specific use cases
+
+### Default Configuration
+
+<CodeGroup>
+```python Basic Usage
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+
+pipeline_options = PdfPipelineOptions()
+pipeline_options.do_picture_description = True  # Uses default model
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_options=pipeline_options
+        )
+    }
+)
+
+result = converter.convert("document.pdf")
+doc = result.document
+
+# Access descriptions
+for item, level in doc.iterate_items():
+    if isinstance(item, PictureItem) and hasattr(item, 'description'):
+        print(f"Description: {item.description}")
+```
+</CodeGroup>
+
+**Source**: ~/workspace/source/docs/usage/enrichments.md:114
+
+### Model Options
+
+#### SmolVLM (Default)
+
+Lightweight 256M parameter model, good for general descriptions.
+
+**Model**: [HuggingFaceTB/SmolVLM-256M-Instruct](https://huggingface.co/HuggingFaceTB/SmolVLM-256M-Instruct)
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    smolvlm_picture_description
+)
+
+pipeline_options = PdfPipelineOptions()
+pipeline_options.picture_description_options = smolvlm_picture_description
+pipeline_options.do_picture_description = True
+```
+
+**Source**: ~/workspace/source/docs/usage/enrichments.md:150
+
+#### Granite Vision
+
+Higher quality 2B parameter model for detailed descriptions.
+
+**Model**: [ibm-granite/granite-vision-3.1-2b-preview](https://huggingface.co/ibm-granite/granite-vision-3.1-2b-preview)
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    granite_picture_description
+)
+
+pipeline_options = PdfPipelineOptions()
+pipeline_options.picture_description_options = granite_picture_description
+pipeline_options.do_picture_description = True
+```
+
+**Source**: ~/workspace/source/docs/usage/enrichments.md:138
+
+#### Custom VLM Models
+
+Use any vision-language model from Hugging Face:
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    PictureDescriptionVlmOptions
+)
+
+pipeline_options = PdfPipelineOptions()
+pipeline_options.picture_description_options = PictureDescriptionVlmOptions(
+    repo_id="your-org/your-vlm-model",
+    prompt="Describe the image in three sentences. Be concise and accurate.",
+)
+pipeline_options.do_picture_description = True
+```
+
+**Source**: ~/workspace/source/docs/usage/enrichments.md:164
+
+#### Remote API Models
+
+Connect to remote inference servers or cloud providers:
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    PictureDescriptionApiOptions
+)
+
+pipeline_options = PdfPipelineOptions()
+
+# Required for remote connections
+pipeline_options.enable_remote_services = True
+
+pipeline_options.picture_description_options = PictureDescriptionApiOptions(
+    url="http://localhost:8000/v1/chat/completions",  # vLLM, Ollama, etc.
+    params=dict(
+        model="your-model-name",
+        seed=42,
+        max_completion_tokens=200,
+    ),
+    prompt="Describe the image in three sentences. Be concise and accurate.",
+    timeout=90,
+)
+pipeline_options.do_picture_description = True
+```
+
+**Source**: ~/workspace/source/docs/usage/enrichments.md:176
+
+<Warning>
+Remote API options may send your document data to external services. Ensure compliance with your data privacy requirements.
+</Warning>
+
+## Enrichment Architecture
+
+### Base Classes
+
+Enrichment models inherit from base classes that define the enrichment interface:
+
+**Source**: ~/workspace/source/docling/models/base_model.py:150
+
+```python
+class GenericEnrichmentModel(ABC, Generic[EnrichElementT]):
+    elements_batch_size: int
+    
+    @abstractmethod
+    def is_processable(self, doc: DoclingDocument, element: NodeItem) -> bool:
+        """Determine if element should be processed."""
+        pass
+    
+    @abstractmethod
+    def prepare_element(
+        self, conv_res: ConversionResult, element: NodeItem
+    ) -> Optional[EnrichElementT]:
+        """Prepare element for batch processing."""
+        pass
+    
+    @abstractmethod
+    def __call__(
+        self, doc: DoclingDocument, element_batch: Iterable[EnrichElementT]
+    ) -> Iterable[NodeItem]:
+        """Process batch of elements and return enriched items."""
+        pass
+```
+
+### Enrichment Types
+
+#### Node-Based Enrichment
+
+For enrichments that only need document structure:
+
+**Source**: ~/workspace/source/docling/models/base_model.py:170
+
+```python
+class BaseEnrichmentModel(GenericEnrichmentModel[NodeItem]):
+    """Enrichment that processes document nodes."""
+    
+    def prepare_element(
+        self, conv_res: ConversionResult, element: NodeItem
+    ) -> Optional[NodeItem]:
+        if self.is_processable(doc=conv_res.document, element=element):
+            return element
+        return None
+```
+
+#### Image-Based Enrichment
+
+For enrichments that need image data:
+
+**Source**: ~/workspace/source/docling/models/base_model.py:179
+
+```python
+class BaseItemAndImageEnrichmentModel(
+    GenericEnrichmentModel[ItemAndImageEnrichmentElement]
+):
+    """Enrichment that processes items with their images."""
+    
+    images_scale: float
+    expansion_factor: float = 0.0  # Expand bounding box
+    
+    def prepare_element(
+        self, conv_res: ConversionResult, element: NodeItem
+    ) -> Optional[ItemAndImageEnrichmentElement]:
+        # Crops image from page using element bounding box
+        # Returns ItemAndImageEnrichmentElement(item=element, image=cropped_image)
+        ...
+```
+
+## Combining Enrichments
+
+Enable multiple enrichments together:
+
+```python
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+
+pipeline_options = PdfPipelineOptions()
+
+# Enable multiple enrichments
+pipeline_options.do_code_enrichment = True
+pipeline_options.do_formula_enrichment = True
+pipeline_options.generate_picture_images = True
+pipeline_options.do_picture_classification = True
+pipeline_options.do_picture_description = True
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_options=pipeline_options
+        )
+    }
+)
+
+result = converter.convert("document.pdf")
+```
+
+## Performance Considerations
+
+<AccordionGroup>
+  <Accordion title="Processing Time">
+    Each enrichment adds processing time:
+    - **Code/Formula**: Relatively fast (transformers inference)
+    - **Picture Classification**: Fast (small model ~100MB)
+    - **Picture Description**: Slower (VLM inference per image)
+    
+    For documents with many images, picture description can significantly increase processing time.
+  </Accordion>
+
+  <Accordion title="Memory Usage">
+    - Each enrichment model loads into memory
+    - VLMs can use 500MB - 8GB+ depending on model size
+    - Consider GPU acceleration for faster VLM processing
+    - Use smaller models (SmolVLM) for resource-constrained environments
+  </Accordion>
+
+  <Accordion title="Batch Processing">
+    Enrichments process elements in batches:
+    
+    ```python
+    from docling.datamodel.settings import settings
+    
+    # Adjust batch size for enrichments
+    settings.perf.elements_batch_size = 32  # Default varies by model
+    ```
+  </Accordion>
+
+  <Accordion title="Selective Enrichment">
+    Filter which elements to enrich:
+    
+    ```python
+    # Only enrich specific picture types
+    from docling_core.types.doc import PictureItem
+    
+    # After conversion, manually filter
+    for item, level in doc.iterate_items():
+        if isinstance(item, PictureItem):
+            if item.classification in ["Chart", "Diagram"]:
+                # Enrich only charts and diagrams
+                pass
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Developing Custom Enrichments
+
+Create your own enrichment models by implementing the base classes:
+
+**Example References**:
+- [Develop picture enrichment](~/workspace/source/docs/examples/develop_picture_enrichment.py)
+- [Develop formula enrichment](~/workspace/source/docs/examples/develop_formula_understanding.py)
+
+### Basic Structure
+
+```python
+from docling.models.base_model import BaseEnrichmentModel
+from docling_core.types.doc import DoclingDocument, NodeItem, TextItem
+from typing import Iterable, Optional
+from docling.datamodel.document import ConversionResult
+
+class CustomEnrichmentModel(BaseEnrichmentModel):
+    def __init__(self, **kwargs):
+        super().__init__()
+        # Initialize your model here
+        self.model = load_your_model()
+    
+    def is_processable(self, doc: DoclingDocument, element: NodeItem) -> bool:
+        """Determine if this element should be enriched."""
+        # Example: only process TextItem elements
+        return isinstance(element, TextItem)
+    
+    def __call__(
+        self, doc: DoclingDocument, element_batch: Iterable[NodeItem]
+    ) -> Iterable[NodeItem]:
+        """Process batch of elements."""
+        batch_list = list(element_batch)
+        
+        # Your enrichment logic here
+        for element in batch_list:
+            # Enrich the element
+            element.enriched_data = self.model.process(element.text)
+        
+        return batch_list
+```
+
+### Integration
+
+Register your enrichment with the pipeline:
+
+```python
+# Add to pipeline_options or integrate via plugin system
+pipeline_options.custom_enrichment_model = CustomEnrichmentModel()
+```
+
+See the [Plugin System](./plugins) guide for more advanced integration.
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Plugin System" icon="puzzle-piece" href="/advanced/plugins">
+    Extend Docling with custom plugins
+  </Card>
+  <Card title="Model Catalog" icon="book" href="/advanced/model-catalog">
+    Available models for enrichments
+  </Card>
+  <Card title="Pipeline Options" icon="sliders" href="/api/options/pipeline-options">
+    Configure enrichment pipelines
+  </Card>
+  <Card title="GPU Acceleration" icon="microchip" href="/advanced/gpu-acceleration">
+    Speed up enrichments with GPU
+  </Card>
+</CardGroup>

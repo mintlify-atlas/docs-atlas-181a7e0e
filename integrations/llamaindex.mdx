@@ -1,0 +1,231 @@
+---
+title: LlamaIndex Integration
+description: Use Docling Reader and Node Parser in LlamaIndex for advanced document processing and RAG applications
+---
+
+Docling is available as an official [LlamaIndex](https://docs.llamaindex.ai/) extension, providing two powerful components: the Docling Reader for document loading and the Docling Node Parser for intelligent chunking.
+
+## Overview
+
+The LlamaIndex Docling integration provides:
+
+- **Docling Reader** - Load documents with high-fidelity structural preservation
+- **Docling Node Parser** - Parse documents into LlamaIndex nodes with structure awareness
+- **Lossless Serialization** - Preserve complete document structure as JSON
+- **Flexible Export** - Export to simplified formats like Markdown when needed
+
+## Installation
+
+```bash
+pip install llama-index-readers-docling llama-index-node-parser-docling
+```
+
+## Components
+
+### Docling Reader
+
+The Docling Reader loads document files and populates LlamaIndex `Document` objects with Docling's rich data model.
+
+#### Basic Usage
+
+```python
+from llama_index.readers.docling import DoclingReader
+
+# Create reader
+reader = DoclingReader()
+
+# Load documents
+documents = reader.load_data(file_path="document.pdf")
+
+# Access document content
+for doc in documents:
+    print(doc.text)
+    print(doc.metadata)
+```
+
+#### Export Formats
+
+```python
+from llama_index.readers.docling import DoclingReader
+from docling.datamodel.base_models import FormatOptions
+
+# Export as Markdown
+reader = DoclingReader(
+    export_type="markdown"
+)
+docs = reader.load_data(file_path="document.pdf")
+
+# Export as JSON (lossless)
+reader = DoclingReader(
+    export_type="json"
+)
+docs = reader.load_data(file_path="document.pdf")
+```
+
+### Docling Node Parser
+
+The Docling Node Parser uses knowledge of Docling's format to intelligently parse documents into LlamaIndex `Node` objects for downstream usage.
+
+#### Basic Usage
+
+```python
+from llama_index.readers.docling import DoclingReader
+from llama_index.node_parser.docling import DoclingNodeParser
+
+# Load documents with Docling Reader
+reader = DoclingReader(export_type="json")
+documents = reader.load_data(file_path="document.pdf")
+
+# Parse into nodes
+parser = DoclingNodeParser()
+nodes = parser.get_nodes_from_documents(documents)
+
+# Nodes are ready for embedding and retrieval
+for node in nodes:
+    print(node.text)
+    print(node.metadata)
+```
+
+#### Advanced Parsing Options
+
+```python
+from llama_index.node_parser.docling import DoclingNodeParser
+
+# Configure parser
+parser = DoclingNodeParser(
+    include_metadata=True,
+    chunk_size=1024,
+    chunk_overlap=128
+)
+
+nodes = parser.get_nodes_from_documents(documents)
+```
+
+## Complete RAG Pipeline
+
+Here's a full example combining both components:
+
+```python
+from llama_index.readers.docling import DoclingReader
+from llama_index.node_parser.docling import DoclingNodeParser
+from llama_index.core import VectorStoreIndex
+from llama_index.embeddings.openai import OpenAIEmbedding
+
+# 1. Load documents
+reader = DoclingReader(export_type="json")
+documents = reader.load_data(file_path="document.pdf")
+
+# 2. Parse into nodes
+parser = DoclingNodeParser()
+nodes = parser.get_nodes_from_documents(documents)
+
+# 3. Create embeddings and index
+embed_model = OpenAIEmbedding()
+index = VectorStoreIndex(nodes, embed_model=embed_model)
+
+# 4. Query the index
+query_engine = index.as_query_engine()
+response = query_engine.query("What is the main topic of this document?")
+print(response)
+```
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="Structure-Aware" icon="sitemap">
+    Preserves document hierarchy and relationships
+  </Card>
+  <Card title="Lossless Export" icon="database">
+    JSON export maintains complete document structure
+  </Card>
+  <Card title="Smart Chunking" icon="scissors">
+    Node parser respects document structure when chunking
+  </Card>
+  <Card title="Rich Metadata" icon="tags">
+    Includes page numbers, headings, and structural information
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+### Knowledge Base RAG
+
+```python
+# Process multiple documents
+reader = DoclingReader(export_type="json")
+
+documents = []
+for file in ["doc1.pdf", "doc2.docx", "doc3.pptx"]:
+    docs = reader.load_data(file_path=file)
+    documents.extend(docs)
+
+parser = DoclingNodeParser()
+nodes = parser.get_nodes_from_documents(documents)
+
+index = VectorStoreIndex(nodes)
+```
+
+### Table-Aware Retrieval
+
+```python
+# Docling preserves table structure
+reader = DoclingReader(
+    export_type="markdown",
+    pipeline_options={"do_table_structure": True}
+)
+
+documents = reader.load_data(file_path="report.pdf")
+parser = DoclingNodeParser()
+nodes = parser.get_nodes_from_documents(documents)
+
+# Tables are preserved in node content
+for node in nodes:
+    if "table" in node.metadata.get("type", "").lower():
+        print("Found table:", node.text)
+```
+
+## Integration Benefits
+
+<Steps>
+  <Step title="Official Components">
+    Maintained as official LlamaIndex integrations
+  </Step>
+  <Step title="Two-Component System">
+    Reader and Parser work together seamlessly
+  </Step>
+  <Step title="Format Flexibility">
+    Choose between lossless JSON or simplified Markdown
+  </Step>
+  <Step title="Production Ready">
+    Used in real-world RAG applications
+  </Step>
+</Steps>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Tutorial" icon="graduation-cap" href="https://docs.llamaindex.ai/en/stable/examples/data_connectors/DoclingReaderDemo/">
+    Step-by-step guide
+  </Card>
+  <Card title="Reader Docs" icon="book" href="https://docs.llamaindex.ai/en/stable/api_reference/readers/docling/">
+    API reference for Docling Reader
+  </Card>
+  <Card title="Parser Docs" icon="book" href="https://docs.llamaindex.ai/en/stable/api_reference/node_parser/docling/">
+    API reference for Node Parser
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/run-llama/llama_index/tree/main/llama-index-integrations/readers/llama-index-readers-docling">
+    Source code
+  </Card>
+</CardGroup>
+
+## PyPI Packages
+
+- [llama-index-readers-docling](https://pypi.org/project/llama-index-readers-docling/) - Docling Reader component
+- [llama-index-node-parser-docling](https://pypi.org/project/llama-index-node-parser-docling/) - Docling Node Parser component
+
+## Next Steps
+
+- Follow the [official tutorial](https://docs.llamaindex.ai/en/stable/examples/data_connectors/DoclingReaderDemo/)
+- Explore [document conversion options](../usage/conversion)
+- Learn about [export formats](../usage/export-formats)
+- Build your first [RAG application](../examples/overview)

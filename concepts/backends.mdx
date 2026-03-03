@@ -1,0 +1,517 @@
+---
+title: Backends
+description: Format-specific document parsing backends in Docling
+---
+
+Backends are format-specific parsers that extract raw content from input documents. Each backend knows how to read a particular document format and provide content to pipelines for processing.
+
+## Backend Architecture
+
+All backends inherit from `AbstractDocumentBackend` (`docling/backend/abstract_backend.py:19`) and implement a common interface:
+
+```python
+class AbstractDocumentBackend(ABC):
+    @abstractmethod
+    def is_valid(self) -> bool:
+        """Check if the document was loaded successfully."""
+        pass
+    
+    @classmethod
+    @abstractmethod
+    def supports_pagination(cls) -> bool:
+        """Whether the backend provides page-level access."""
+        pass
+    
+    @classmethod
+    @abstractmethod
+    def supported_formats(cls) -> set[InputFormat]:
+        """Input formats this backend can handle."""
+        pass
+```
+
+## Backend Types
+
+Docling defines two main backend categories:
+
+### Declarative Backends
+
+**Purpose**: Formats that can be directly converted to `DoclingDocument` without complex processing.
+
+**Base class**: `DeclarativeDocumentBackend` (`docling/backend/abstract_backend.py:66`)
+
+**Key method**:
+```python
+@abstractmethod
+def convert(self) -> DoclingDocument:
+    """Directly produce a DoclingDocument."""
+    pass
+```
+
+**Examples**:
+- `MsWordDocumentBackend`: DOCX files
+- `HTMLDocumentBackend`: HTML files
+- `MarkdownDocumentBackend`: Markdown files
+- `CsvDocumentBackend`: CSV files
+- `MsExcelDocumentBackend`: Excel files
+- `MsPowerpointDocumentBackend`: PowerPoint files
+- `JatsDocumentBackend`: JATS XML scientific papers
+- `XBRLDocumentBackend`: XBRL financial reports
+
+Declarative backends are used with `SimplePipeline` which delegates conversion entirely to the backend.
+
+### Paginated Backends
+
+**Purpose**: Formats that require page-by-page processing with ML models.
+
+**Base class**: `PaginatedDocumentBackend` (`docling/backend/abstract_backend.py:54`)
+
+**Key methods**:
+```python
+@abstractmethod
+def page_count(self) -> int:
+    """Total number of pages in the document."""
+    pass
+
+@abstractmethod
+def load_page(self, page_no: int) -> PageBackend:
+    """Load a specific page for processing."""
+    pass
+```
+
+**Examples**:
+- `DoclingParseDocumentBackend`: PDF files (primary backend)
+- `PdfDocumentBackend`: Base class for PDF backends
+- `ImageDocumentBackend`: Image files treated as single-page documents
+
+Paginated backends are used with `StandardPdfPipeline` or `VlmPipeline` for advanced processing.
+
+## PDF Backends
+
+### DoclingParseDocumentBackend
+
+**Implementation**: `docling/backend/docling_parse_backend.py:202`
+
+**Purpose**: High-performance PDF parsing using the `docling-parse` library.
+
+**Features**:
+- Native PDF text extraction
+- Vector graphics parsing
+- Bitmap detection
+- Character-level positioning
+- Word and line segmentation
+
+**Architecture**:
+```python
+class DoclingParseDocumentBackend(PdfDocumentBackend):
+    def __init__(self, in_doc, path_or_stream, options):
+        # pypdfium2 for rendering
+        self._pdoc = pdfium.PdfDocument(path_or_stream)
+        
+        # docling-parse for text extraction
+        self.parser = DoclingPdfParser()
+        self.dp_doc = self.parser.load(path_or_stream)
+    
+    def load_page(self, page_no: int) -> DoclingParsePageBackend:
+        ppage = self._pdoc[page_no]  # pypdfium2 page
+        return DoclingParsePageBackend(
+            dp_doc=self.dp_doc,
+            page_obj=ppage,
+            page_no=page_no
+        )
+```
+
+**Page Backend** (`DoclingParsePageBackend`):
+
+```python
+class DoclingParsePageBackend(PdfPageBackend):
+    def get_segmented_page(self) -> SegmentedPdfPage:
+        """Get parsed page with text cells and structure."""
+        config = DecodePageConfig(
+            create_word_cells=True,
+            create_line_cells=True,
+            keep_bitmaps=True
+        )
+        return self._dp_doc.get_page(self._page_no + 1, config=config)
+    
+    def get_text_cells(self) -> Iterable[TextCell]:
+        """Get all text line cells on the page."""
+        return self._dpage.textline_cells
+    
+    def get_bitmap_rects(self, scale: float = 1) -> Iterable[BoundingBox]:
+        """Get bounding boxes of all images on the page."""
+        for img in self._dpage.bitmap_resources:
+            yield img.rect.to_bounding_box()
+    
+    def get_page_image(self, scale: float = 1, cropbox: BoundingBox = None):
+        """Render the page as an image."""
+        return self._ppage.render(scale=scale * 1.5).to_pil()
+    
+    def get_text_in_rect(self, bbox: BoundingBox) -> str:
+        """Extract text within a specific bounding box."""
+        text = ""
+        for cell in self._dpage.textline_cells:
+            if cell.rect.intersects(bbox):
+                text += cell.text + " "
+        return text.strip()
+```
+
+**Usage with options**:
+```python
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.backend_options import PdfBackendOptions
+from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
+
+backend_options = PdfBackendOptions(
+    password="secret"  # For encrypted PDFs
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            backend=DoclingParseDocumentBackend,
+            backend_options=backend_options
+        )
+    }
+)
+```
+
+### Alternative PDF Backends
+
+Docling also provides:
+
+- **`DoclingParseV2Backend`**: Experimental v2 parser
+- **`DoclingParseV4Backend`**: Experimental v4 parser  
+- **`LegacyStandardPdfBackend`**: Legacy implementation
+
+These are primarily for testing and development.
+
+## Declarative Backend Examples
+
+### HTMLDocumentBackend
+
+**Implementation**: `docling/backend/html_backend.py`
+
+**Features**:
+- Parses HTML structure into `DoclingDocument`
+- Preserves hierarchy (headings, paragraphs, lists)
+- Extracts tables with structure
+- Handles embedded images
+
+**Usage**:
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("page.html")
+```
+
+### MarkdownDocumentBackend
+
+**Implementation**: `docling/backend/md_backend.py`
+
+**Features**:
+- Parses Markdown syntax
+- Converts to semantic document structure
+- Supports tables, code blocks, images
+
+**Options**:
+```python
+from docling.document_converter import DocumentConverter, MarkdownFormatOption
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.backend_options import MarkdownBackendOptions
+
+backend_options = MarkdownBackendOptions(
+    # Backend-specific options if available
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.MD: MarkdownFormatOption(backend_options=backend_options)
+    }
+)
+```
+
+### MsWordDocumentBackend
+
+**Implementation**: `docling/backend/msword_backend.py`
+
+**Features**:
+- Extracts text, tables, and images from DOCX
+- Preserves document structure and styles
+- Handles equations (via LaTeX/OMML conversion)
+
+### DoclingJSONBackend
+
+**Implementation**: `docling/backend/json/docling_json_backend.py`
+
+**Purpose**: Load previously exported Docling JSON format.
+
+**Usage**:
+```python
+from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import InputFormat
+
+converter = DocumentConverter(
+    allowed_formats=[InputFormat.JSON_DOCLING]
+)
+result = converter.convert("document.json")
+```
+
+## Backend Options
+
+Many backends accept options to customize behavior:
+
+### PdfBackendOptions
+
+```python
+from docling.datamodel.backend_options import PdfBackendOptions
+from pydantic import SecretStr
+
+options = PdfBackendOptions(
+    password=SecretStr("pdf_password")  # For encrypted PDFs
+)
+```
+
+### HTMLBackendOptions
+
+```python
+from docling.datamodel.backend_options import HTMLBackendOptions
+
+options = HTMLBackendOptions(
+    # HTML-specific options
+)
+```
+
+### MarkdownBackendOptions
+
+```python
+from docling.datamodel.backend_options import MarkdownBackendOptions
+
+options = MarkdownBackendOptions(
+    # Markdown-specific options
+)
+```
+
+### XBRLBackendOptions
+
+```python
+from docling.datamodel.backend_options import XBRLBackendOptions
+
+options = XBRLBackendOptions(
+    # XBRL-specific options for financial documents
+)
+```
+
+## Backend Lifecycle
+
+### Initialization
+
+Backends are instantiated by the `InputDocument` during format detection:
+
+```python
+backend = BackendClass(
+    in_doc=input_document,
+    path_or_stream=file_stream,
+    options=backend_options
+)
+```
+
+### Resource Management
+
+Backends must implement proper cleanup:
+
+```python
+def unload(self):
+    """Release resources (close files, free memory)."""
+    if isinstance(self.path_or_stream, BytesIO):
+        self.path_or_stream.close()
+    self.path_or_stream = None
+```
+
+The pipeline's `_unload()` method ensures backends are cleaned up after conversion:
+
+```python
+def _unload(self, conv_res: ConversionResult):
+    # Unload page backends
+    for page in conv_res.pages:
+        if page._backend is not None:
+            page._backend.unload()
+    
+    # Unload document backend
+    if conv_res.input._backend:
+        conv_res.input._backend.unload()
+```
+
+## Creating Custom Backends
+
+You can implement custom backends for new formats:
+
+### Declarative Backend Example
+
+```python
+from docling.backend.abstract_backend import DeclarativeDocumentBackend
+from docling_core.types.doc import DoclingDocument
+from docling.datamodel.base_models import InputFormat
+
+class CustomFormatBackend(DeclarativeDocumentBackend):
+    def convert(self) -> DoclingDocument:
+        # Parse your format
+        content = self.path_or_stream.read()
+        
+        # Create DoclingDocument
+        doc = DoclingDocument(name=self.file.name)
+        
+        # Add content
+        # ... your parsing logic ...
+        
+        return doc
+    
+    def is_valid(self) -> bool:
+        return self.path_or_stream is not None
+    
+    @classmethod
+    def supports_pagination(cls) -> bool:
+        return False
+    
+    @classmethod
+    def supported_formats(cls) -> set[InputFormat]:
+        return {InputFormat.CUSTOM}  # Define your format
+```
+
+### Paginated Backend Example
+
+```python
+from docling.backend.abstract_backend import PaginatedDocumentBackend
+
+class CustomPagedBackend(PaginatedDocumentBackend):
+    def page_count(self) -> int:
+        # Return total pages
+        return self._page_count
+    
+    def load_page(self, page_no: int):
+        # Return page-specific backend
+        return CustomPageBackend(self, page_no)
+    
+    def is_valid(self) -> bool:
+        return self.page_count() > 0
+    
+    @classmethod
+    def supports_pagination(cls) -> bool:
+        return True
+    
+    @classmethod
+    def supported_formats(cls) -> set[InputFormat]:
+        return {InputFormat.CUSTOM}
+```
+
+## Backend Selection
+
+The `DocumentConverter` selects backends based on the format-to-options mapping:
+
+```python
+# Default mapping (in document_converter.py)
+format_to_default_options = {
+    InputFormat.PDF: PdfFormatOption(
+        backend=DoclingParseDocumentBackend,
+        pipeline_cls=StandardPdfPipeline
+    ),
+    InputFormat.DOCX: WordFormatOption(
+        backend=MsWordDocumentBackend,
+        pipeline_cls=SimplePipeline
+    ),
+    # ... etc
+}
+```
+
+You can override defaults:
+
+```python
+from docling.document_converter import DocumentConverter, FormatOption
+from docling.pipeline.vlm_pipeline import VlmPipeline
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: FormatOption(
+            backend=DoclingParseDocumentBackend,  # Custom backend
+            pipeline_cls=VlmPipeline,             # Custom pipeline
+            pipeline_options=VlmPipelineOptions(...)
+        )
+    }
+)
+```
+
+## Backend vs Pipeline Responsibilities
+
+**Backends handle**:
+- Format-specific parsing
+- Raw text extraction
+- Image access
+- Structure information (when available)
+
+**Pipelines handle**:
+- ML model application (OCR, layout, tables)
+- Document assembly
+- Hierarchy construction
+- Enrichment
+
+<Info>
+This separation allows the same backend (e.g., `DoclingParseDocumentBackend`) to be used with different pipelines (`StandardPdfPipeline` vs `VlmPipeline`) for different processing strategies.
+</Info>
+
+## Performance Considerations
+
+### Lazy Loading
+
+Paginated backends should load pages on demand:
+
+```python
+# Good: Load page when needed
+page_backend = doc_backend.load_page(page_no)
+
+# Bad: Load all pages upfront
+all_pages = [doc_backend.load_page(i) for i in range(page_count)]
+```
+
+### Resource Cleanup
+
+Always unload backends to free resources:
+
+```python
+try:
+    result = converter.convert("document.pdf")
+finally:
+    # Pipeline handles cleanup automatically
+    pass
+```
+
+### Thread Safety
+
+PDF backends use locks for thread-safe access to pypdfium2:
+
+```python
+from docling.utils.locks import pypdfium2_lock
+
+with pypdfium2_lock:
+    page = self._pdoc[page_no]
+```
+
+## Related Topics
+
+<CardGroup cols={2}>
+  <Card title="Pipelines" icon="diagram-project" href="/concepts/pipelines">
+    Learn how pipelines use backends for processing
+  </Card>
+  
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Understand how backends fit in Docling's architecture
+  </Card>
+  
+  <Card title="docling-parse" icon="github" href="https://github.com/docling-project/docling-parse">
+    Explore the high-performance PDF parsing library
+  </Card>
+  
+  <Card title="Usage Guide" icon="book" href="/guides/basic-conversion">
+    See backend configuration examples
+  </Card>
+</CardGroup>

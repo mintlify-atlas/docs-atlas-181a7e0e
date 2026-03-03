@@ -1,0 +1,412 @@
+---
+title: XLSX Backend
+description: Microsoft Excel spreadsheet parsing and data extraction
+---
+
+## Overview
+
+The XLSX backend (`MsExcelDocumentBackend`) parses Microsoft Excel workbooks (.xlsx files) and converts them to `DoclingDocument` format. Each worksheet becomes a page, with data clusters automatically detected and extracted as tables.
+
+## Features
+
+- **Sheet-by-page conversion** - Each worksheet becomes a document page
+- **Automatic table detection** - Groups connected cells into logical tables
+- **Merged cell handling** - Properly handles cell spans
+- **Image extraction** - Embedded pictures and charts
+- **Gap tolerance** - Configurable gap bridging for disconnected data
+- **Singleton cell handling** - Option to treat single cells as text
+- **Hidden sheet support** - Processes visible and hidden sheets
+- **Formula values** - Extracts calculated values (not formulas)
+
+## Usage
+
+### Basic Conversion
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("spreadsheet.xlsx")
+
+# Access converted document
+doc = result.document
+print(f"Worksheets: {len(doc.pages)}")
+
+for page in doc.pages:
+    print(f"\nSheet {page.page_no}:")
+    for item, _ in doc.iterate_items(page_no=page.page_no):
+        if isinstance(item, TableItem):
+            print(f"  Table: {item.data.num_rows} x {item.data.num_cols}")
+```
+
+### With Backend Options
+
+```python
+from docling.document_converter import DocumentConverter, XlsxFormatOption
+from docling.datamodel.backend_options import MsExcelBackendOptions
+
+backend_options = MsExcelBackendOptions(
+    treat_singleton_as_text=True,
+    gap_tolerance=1
+)
+
+converter = DocumentConverter(
+    format_options={
+        XlsxFormatOption: XlsxFormatOption(
+            backend_options=backend_options
+        )
+    }
+)
+
+result = converter.convert("spreadsheet.xlsx")
+```
+
+## MsExcelBackendOptions
+
+Configuration options for Excel parsing.
+
+### Parameters
+
+<ParamField path="kind" type="Literal['xlsx']" default="'xlsx'">
+  Backend type identifier. Always set to `"xlsx"` for Excel backends.
+</ParamField>
+
+<ParamField path="treat_singleton_as_text" type="bool" default="False">
+  Whether to treat singleton cells (1x1 tables with empty neighboring cells) as `TextItem` instead of `TableItem`.
+  
+  **Use when:**
+  - Spreadsheet contains scattered labels or single values
+  - You want individual cells as text rather than 1x1 tables
+  
+  ```python
+  options = MsExcelBackendOptions(treat_singleton_as_text=True)
+  ```
+</ParamField>
+
+<ParamField path="gap_tolerance" type="int" default="0">
+  The tolerance (in number of empty rows/columns) for merging nearby data clusters into a single table.
+  
+  - `0` (strict): Cells must be adjacent to be in same table
+  - `1`: Allows 1 empty row/column between data
+  - `2+`: Bridges larger gaps
+  
+  **Example:**
+  ```python
+  # Merge tables with 1-cell gaps between them
+  options = MsExcelBackendOptions(gap_tolerance=1)
+  ```
+</ParamField>
+
+<ParamField path="enable_remote_fetch" type="bool" default="False">
+  Enable fetching of remote resources referenced in the workbook.
+</ParamField>
+
+<ParamField path="enable_local_fetch" type="bool" default="False">
+  Enable fetching of local resources referenced in the workbook.
+</ParamField>
+
+## Table Detection
+
+The backend uses a flood-fill (BFS) algorithm to detect contiguous data regions:
+
+### Algorithm
+
+<Steps>
+  <Step title="Scan for data">
+    Identify all non-empty cells and merged cell ranges
+  </Step>
+  
+  <Step title="Flood fill">
+    Starting from each unvisited cell, expand to find connected cells
+    - Respects `gap_tolerance` for bridging gaps
+    - Creates rectangular bounding box
+  </Step>
+  
+  <Step title="Extract structure">
+    Build table with:
+    - Cell text and formatting
+    - Merged cell spans
+    - Header row detection (first row = column headers)
+  </Step>
+</Steps>
+
+### Example
+
+Given a spreadsheet:
+
+```
+     A    B    C         E    F
+1   Name  Age  City      ID   Score
+2   John  30   NYC       101  85
+3   Jane  25   LA        102  92
+
+5   Total: 2 people
+```
+
+**With `gap_tolerance=0` (default):**
+- Table 1: A1:C3 (Name/Age/City table)
+- Table 2: E1:F3 (ID/Score table)
+- Table 3: A5:A5 ("Total: 2 people")
+
+**With `gap_tolerance=1`:**
+- Table 1: A1:F3 (All data merged into one table)
+- Table 2: A5:A5 (Still separate due to 1-row gap)
+
+**With `treat_singleton_as_text=True`:**
+- Table 1: A1:C3
+- Table 2: E1:F3
+- Text: "Total: 2 people" (as TextItem, not TableItem)
+
+## Merged Cells
+
+Proper handling of Excel merged cells:
+
+```python
+for table, _ in doc.iterate_items():
+    if isinstance(table, TableItem):
+        for cell in table.data.table_cells:
+            if cell.row_span > 1 or cell.col_span > 1:
+                print(f"Merged cell: {cell.text}")
+                print(f"  Spans: {cell.row_span} rows x {cell.col_span} cols")
+                print(f"  Position: ({cell.start_row_offset_idx},{cell.start_col_offset_idx})")
+```
+
+**Features:**
+- Correct span calculation (`rowspan`, `colspan`)
+- Hidden cells in merged regions excluded
+- Cell content from top-left anchor cell
+
+## Images
+
+Extracts embedded images and charts:
+
+```python
+for item, _ in doc.iterate_items():
+    if isinstance(item, PictureItem):
+        print(f"Image on sheet {item.prov[0].page_no}")
+        print(f"  Position: {item.prov[0].bbox}")
+        
+        # Save image
+        img = item.image.pil_image
+        img.save(f"excel_image_{item.self_ref}.png")
+```
+
+**Supported:**
+- Inline images
+- Floating images
+- Two-cell anchors (position and size)
+- One-cell anchors (position only)
+
+## Worksheet Organization
+
+Each worksheet creates a section group:
+
+```python
+from docling_core.types.doc import GroupLabel
+
+for group, _ in doc.iterate_items():
+    if isinstance(group, GroupItem) and group.label == GroupLabel.SECTION:
+        print(f"Sheet: {group.name}")
+        # Sheet name extracted from workbook
+```
+
+## Hidden Sheets
+
+Hidden worksheets are marked with `INVISIBLE` content layer:
+
+```python
+from docling_core.types.doc.document import ContentLayer
+
+for group, _ in doc.iterate_items():
+    if group.content_layer == ContentLayer.INVISIBLE:
+        print(f"Hidden sheet: {group.name}")
+```
+
+## Provenance and Coordinates
+
+Bounding boxes use cell indices (0-based) as coordinate system:
+
+```python
+for table, _ in doc.iterate_items():
+    if isinstance(table, TableItem) and table.prov:
+        prov = table.prov[0]
+        bbox = prov.bbox
+        
+        print(f"Table on sheet {prov.page_no}")
+        print(f"  Columns: {bbox.l} to {bbox.r}")
+        print(f"  Rows: {bbox.t} to {bbox.b}")
+        # Coordinates are cell indices (0-based)
+```
+
+Page size reflects the data extent:
+
+```python
+for page in doc.pages:
+    print(f"Sheet {page.page_no}: {page.size.width} cols x {page.size.height} rows")
+```
+
+## Advanced Usage
+
+### Extract Specific Tables
+
+```python
+result = converter.convert("data.xlsx")
+
+for table, _ in result.document.iterate_items():
+    if isinstance(table, TableItem):
+        # Convert to pandas DataFrame
+        import pandas as pd
+        
+        data = []
+        for cell in table.data.table_cells:
+            # Build DataFrame structure
+            pass
+```
+
+### Process Large Workbooks
+
+```python
+from docling.document_converter import DocumentConverter
+
+# Process workbook
+converter = DocumentConverter()
+result = converter.convert("large_workbook.xlsx")
+
+# Process sheet by sheet
+for page_no in range(1, len(result.document.pages) + 1):
+    print(f"\nProcessing sheet {page_no}")
+    
+    for item, _ in result.document.iterate_items(page_no=page_no):
+        if isinstance(item, TableItem):
+            # Process table
+            print(f"  Table with {len(item.data.table_cells)} cells")
+```
+
+### Custom Gap Tolerance
+
+```python
+# For sparse spreadsheets with scattered data
+options = MsExcelBackendOptions(
+    gap_tolerance=2,  # Bridge 2-cell gaps
+    treat_singleton_as_text=True
+)
+
+converter = DocumentConverter(
+    format_options={
+        XlsxFormatOption: XlsxFormatOption(backend_options=options)
+    }
+)
+```
+
+## Performance
+
+- **Speed**: Fast for moderate-sized workbooks
+- **Memory**: Memory usage scales with data size
+- **Concurrency**: Thread-safe per document instance
+
+```python
+import concurrent.futures
+
+def convert_excel(file_path):
+    converter = DocumentConverter()
+    return converter.convert(file_path)
+
+# Process multiple workbooks in parallel
+files = ["data1.xlsx", "data2.xlsx", "data3.xlsx"]
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    results = list(executor.map(convert_excel, files))
+```
+
+## Limitations
+
+<Warning>
+  **Known Limitations:**
+  
+  - **Formulas**: Only calculated values extracted, not formulas
+  - **Charts**: Charts rendered as images, data not extracted
+  - **Pivot Tables**: Pivot table results extracted, not definitions
+  - **Conditional Formatting**: Visual formatting not captured
+  - **Data Validation**: Validation rules not preserved
+  - **Macros**: VBA macros not extracted
+  - **Cell Comments**: Comments not currently extracted
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Too many small tables">
+    **Cause**: Strict gap tolerance (default 0)
+    
+    **Solution**: Increase gap tolerance
+    ```python
+    options = MsExcelBackendOptions(gap_tolerance=1)
+    ```
+  </Accordion>
+  
+  <Accordion title="Unwanted 1x1 tables">
+    **Cause**: Singleton cells treated as tables
+    
+    **Solution**: Enable singleton-as-text
+    ```python
+    options = MsExcelBackendOptions(treat_singleton_as_text=True)
+    ```
+  </Accordion>
+  
+  <Accordion title="Missing data">
+    **Possible causes:**
+    - Hidden sheets (check content layer)
+    - Empty cells not creating tables
+    - Data outside detected bounds
+    
+    **Check**: Verify source Excel file structure
+  </Accordion>
+  
+  <Accordion title="Incorrect merged cells">
+    **Solution**: Check Excel file for corrupted merge regions
+    
+    Backend respects Excel's merge definitions exactly
+  </Accordion>
+</AccordionGroup>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Data Extraction">
+    Extract tabular data from Excel reports for analysis or database import
+  </Card>
+  
+  <Card title="Report Processing">
+    Convert financial or operational reports to structured format
+  </Card>
+  
+  <Card title="Data Migration">
+    Transform Excel data for import into other systems
+  </Card>
+  
+  <Card title="Archive Processing">
+    Extract and preserve data from Excel archives
+  </Card>
+</CardGroup>
+
+## Export Formats
+
+```python
+result = converter.convert("data.xlsx")
+doc = result.document
+
+# Export to Markdown (tables as markdown tables)
+markdown = doc.export_to_markdown()
+
+# Export to JSON
+json_doc = doc.model_dump_json()
+
+# Export to plain text
+text = doc.export_to_text()
+```
+
+## See Also
+
+- [Backends Overview](/api/backends/overview) - Backend architecture
+- [DOCX Backend](/api/backends/docx) - Word document processing
+- [PPTX Backend](/api/backends/pptx) - PowerPoint processing
+- [Table Export](/examples/table-export) - Table extraction examples

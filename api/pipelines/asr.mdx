@@ -1,0 +1,341 @@
+---
+title: AsrPipeline
+description: Automatic Speech Recognition pipeline for converting audio files to text transcripts
+---
+
+## Overview
+
+`AsrPipeline` converts audio files to text using Automatic Speech Recognition (ASR) models. It supports multiple Whisper implementations and provides timestamped transcriptions with optional speaker identification.
+
+## Class Signature
+
+```python
+class AsrPipeline(BasePipeline):
+    def __init__(self, pipeline_options: AsrPipelineOptions)
+```
+
+### Parameters
+
+<ParamField path="pipeline_options" type="AsrPipelineOptions" required>
+  Configuration options for the ASR pipeline
+  
+  <Expandable title="properties">
+    <ParamField path="asr_options" type="InlineAsrNativeWhisperOptions | InlineAsrMlxWhisperOptions" required>
+      ASR model configuration
+    </ParamField>
+    
+    <ParamField path="artifacts_path" type="str | None">
+      Path to directory containing model artifacts
+    </ParamField>
+    
+    <ParamField path="accelerator_options" type="AcceleratorOptions">
+      Hardware acceleration configuration (device, num_threads, etc.)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## ASR Options
+
+### Native Whisper Options
+
+Uses OpenAI's native Whisper implementation:
+
+```python
+from docling.datamodel.pipeline_options_asr_model import (
+    InlineAsrNativeWhisperOptions
+)
+
+asr_options = InlineAsrNativeWhisperOptions(
+    repo_id="base",  # Model size: tiny, base, small, medium, large
+    temperature=0.0,
+    max_new_tokens=448,
+    verbose=False,
+    timestamps=True,
+    word_timestamps=True
+)
+```
+
+<ParamField path="repo_id" type="str" default="base">
+  Whisper model size: `tiny`, `base`, `small`, `medium`, `large`, `large-v2`, `large-v3`
+</ParamField>
+
+<ParamField path="temperature" type="float" default="0.0">
+  Sampling temperature for generation
+</ParamField>
+
+<ParamField path="max_new_tokens" type="int" default="448">
+  Maximum number of tokens to generate
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="false">
+  Enable verbose output during transcription
+</ParamField>
+
+<ParamField path="timestamps" type="bool" default="true">
+  Include segment-level timestamps
+</ParamField>
+
+<ParamField path="word_timestamps" type="bool" default="false">
+  Include word-level timestamps
+</ParamField>
+
+### MLX Whisper Options
+
+Uses MLX-optimized Whisper for Apple Silicon:
+
+```python
+from docling.datamodel.pipeline_options_asr_model import (
+    InlineAsrMlxWhisperOptions
+)
+
+asr_options = InlineAsrMlxWhisperOptions(
+    repo_id="mlx-community/whisper-base",
+    language="en",
+    task="transcribe",
+    word_timestamps=True,
+    no_speech_threshold=0.6,
+    logprob_threshold=-1.0,
+    compression_ratio_threshold=2.4
+)
+```
+
+<ParamField path="repo_id" type="str" required>
+  HuggingFace repository ID for MLX Whisper model
+</ParamField>
+
+<ParamField path="language" type="str | None">
+  Language code (e.g., "en", "es", "fr"). Auto-detected if None
+</ParamField>
+
+<ParamField path="task" type="str" default="transcribe">
+  Task type: `transcribe` or `translate` (to English)
+</ParamField>
+
+<ParamField path="word_timestamps" type="bool" default="false">
+  Include word-level timestamps
+</ParamField>
+
+<ParamField path="no_speech_threshold" type="float" default="0.6">
+  Threshold for detecting silence
+</ParamField>
+
+<ParamField path="logprob_threshold" type="float" default="-1.0">
+  Log probability threshold for filtering
+</ParamField>
+
+<ParamField path="compression_ratio_threshold" type="float" default="2.4">
+  Compression ratio threshold for quality filtering
+</ParamField>
+
+## Methods
+
+### execute
+
+Executes the pipeline on an input audio file.
+
+```python
+def execute(
+    self,
+    in_doc: InputDocument,
+    raises_on_error: bool
+) -> ConversionResult
+```
+
+<ParamField path="in_doc" type="InputDocument" required>
+  Input audio file to transcribe (WAV, MP3, etc.)
+</ParamField>
+
+<ParamField path="raises_on_error" type="bool" required>
+  If True, raises exceptions on errors; otherwise captures them in ConversionResult
+</ParamField>
+
+<ResponseField name="return" type="ConversionResult">
+  Conversion result containing transcribed text with timestamps
+</ResponseField>
+
+### get_default_options
+
+Returns default pipeline options.
+
+```python
+@classmethod
+def get_default_options(cls) -> AsrPipelineOptions
+```
+
+<ResponseField name="return" type="AsrPipelineOptions">
+  Default configuration for AsrPipeline
+</ResponseField>
+
+### is_backend_supported
+
+Checks if a backend is supported by this pipeline.
+
+```python
+@classmethod
+def is_backend_supported(cls, backend: AbstractDocumentBackend) -> bool
+```
+
+<ParamField path="backend" type="AbstractDocumentBackend" required>
+  Backend instance to check
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  True if backend is NoOpBackend, False otherwise
+</ResponseField>
+
+## Output Format
+
+The pipeline produces a `DoclingDocument` with text items containing:
+
+- **text**: Transcribed content
+- **source**: `TrackSource` with timing information
+  - `start_time`: Segment start in seconds
+  - `end_time`: Segment end in seconds
+  - `voice`: Speaker identifier (if available)
+
+## Usage Examples
+
+### Native Whisper
+
+```python
+from docling.pipeline.asr_pipeline import AsrPipeline
+from docling.datamodel.pipeline_options import AsrPipelineOptions
+from docling.datamodel.pipeline_options_asr_model import (
+    InlineAsrNativeWhisperOptions
+)
+from docling.datamodel.document import InputDocument
+from docling.datamodel.base_models import InputFormat
+
+# Configure pipeline
+asr_options = InlineAsrNativeWhisperOptions(
+    repo_id="base",
+    word_timestamps=True
+)
+
+pipeline_options = AsrPipelineOptions(
+    asr_options=asr_options
+)
+
+# Create pipeline
+pipeline = AsrPipeline(pipeline_options=pipeline_options)
+
+# Process audio file
+input_doc = InputDocument(
+    path_or_stream="meeting.wav",
+    format=InputFormat.AUDIO
+)
+result = pipeline.execute(input_doc, raises_on_error=False)
+
+if result.status == ConversionStatus.SUCCESS:
+    # Export transcript
+    for item in result.document.texts:
+        track = item.source
+        print(f"[{track.start_time:.2f}s - {track.end_time:.2f}s]: {item.text}")
+```
+
+### MLX Whisper (Apple Silicon)
+
+```python
+from docling.datamodel.pipeline_options_asr_model import (
+    InlineAsrMlxWhisperOptions
+)
+
+# Configure MLX pipeline
+asr_options = InlineAsrMlxWhisperOptions(
+    repo_id="mlx-community/whisper-large-v3",
+    language="en",
+    word_timestamps=True
+)
+
+pipeline_options = AsrPipelineOptions(
+    asr_options=asr_options
+)
+
+pipeline = AsrPipeline(pipeline_options=pipeline_options)
+
+# Process audio
+result = pipeline.execute(input_doc, raises_on_error=False)
+```
+
+### Export to Different Formats
+
+```python
+if result.status == ConversionStatus.SUCCESS:
+    # Export to Markdown
+    markdown = result.document.export_to_markdown()
+    
+    # Export to text
+    text = result.document.export_to_text()
+    
+    # Export to JSON
+    json_output = result.document.export_to_json()
+```
+
+## Supported Audio Formats
+
+The pipeline supports common audio formats:
+
+- WAV
+- MP3
+- FLAC
+- M4A
+- OGG
+
+For BytesIO streams, the format is inferred from the filename extension.
+
+## Error Handling
+
+### Zero-Duration Segments
+
+The pipeline automatically handles zero-duration ASR segments:
+
+```python
+# If end_time <= start_time, adds small epsilon (0.001s)
+# to create valid time range
+```
+
+### Failed Transcription
+
+If transcription fails:
+- Status is set to `ConversionStatus.FAILURE`
+- Error details are captured in `ConversionResult.errors`
+- Empty document results in `ConversionStatus.PARTIAL_SUCCESS`
+
+## Installation Requirements
+
+### Native Whisper
+
+```bash
+pip install openai-whisper
+# or
+uv sync --extra asr
+```
+
+### MLX Whisper
+
+```bash
+pip install mlx-whisper
+# or
+uv sync --extra asr
+```
+
+<Note>
+  MLX Whisper is only available on Apple Silicon (M1/M2/M3) devices.
+</Note>
+
+## Performance Considerations
+
+- **Model Size**: Larger models (medium, large) are more accurate but slower
+- **Word Timestamps**: Enable for detailed timing but increases processing time
+- **GPU Acceleration**: Use CUDA/MLX for faster inference
+- **Batch Processing**: Process multiple files sequentially
+- **Language Specification**: Setting language explicitly improves speed
+
+## Model Recommendations
+
+| Use Case | Native Whisper | MLX Whisper |
+|----------|----------------|-------------|
+| Quick transcription | `tiny` or `base` | `whisper-tiny` |
+| Balanced quality | `small` or `medium` | `whisper-small` |
+| High accuracy | `large-v3` | `whisper-large-v3` |
+| Production | `large-v3` | `whisper-large-v3-turbo` |

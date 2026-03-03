@@ -1,0 +1,327 @@
+---
+title: DoclingDocument
+description: The unified document representation format in Docling
+---
+
+With Docling v2, we introduced a unified document representation format called `DoclingDocument`. It is defined as a Pydantic datatype that can express several features common to documents.
+
+## Key Features
+
+The `DoclingDocument` format supports:
+
+- **Rich content types**: Text, tables, pictures, key-value pairs, and more
+- **Document hierarchy**: Sections, groups, and nested structures
+- **Content classification**: Main body vs. furniture (headers, footers)
+- **Layout information**: Bounding boxes for all items when available
+- **Provenance tracking**: Source page and position for each element
+
+<Note>
+The definition of the Pydantic types is implemented in the module `docling_core.types.doc`. See the [source code definitions](https://github.com/docling-project/docling-core/tree/main/docling_core/types/doc) for complete details.
+</Note>
+
+## Document Structure
+
+A `DoclingDocument` exposes top-level fields organized into two categories:
+
+### Content Items
+
+These fields store the actual content extracted from the document:
+
+- **`texts`**: All items with text representation (paragraphs, headings, equations, etc.). Base class: `TextItem`
+- **`tables`**: All tables, type `TableItem`. Can carry structure annotations
+- **`pictures`**: All pictures, type `PictureItem`. Can carry structure annotations
+- **`key_value_items`**: All key-value pairs extracted from forms or structured data
+
+All content items inherit from `DocItem` and can reference parents and children through JSON pointers.
+
+### Content Structure
+
+These fields define the document's hierarchical organization:
+
+- **`body`**: Root node of the tree structure for the main document body
+- **`furniture`**: Root node for items that don't belong in the body (headers, footers, page numbers)
+- **`groups`**: Container items that don't represent content themselves but organize other items (lists, chapters)
+
+Structure fields store `NodeItem` instances that reference children and parents through JSON pointers.
+
+<Info>
+The reading order of the document is encapsulated through the `body` tree and the order of children in each node. This preserves the semantic flow of the original document.
+</Info>
+
+## Construction APIs
+
+Docling provides several ways to create `DoclingDocument` instances:
+
+### From Conversion
+
+The most common method is through `DocumentConverter`:
+
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert("document.pdf")
+doc = result.document  # DoclingDocument instance
+```
+
+### From Scratch
+
+You can build documents programmatically using the construction APIs:
+
+```python
+from docling_core.types.doc import DoclingDocument, TextItem
+from docling_core.types.doc.labels import DocItemLabel
+
+doc = DoclingDocument(name="my-document")
+
+# Add a title
+title = TextItem(label=DocItemLabel.TITLE, text="Document Title")
+doc.add_text(parent=doc.body, text=title)
+
+# Add a paragraph
+para = TextItem(label=DocItemLabel.PARAGRAPH, text="This is content.")
+doc.add_text(parent=doc.body, text=para)
+```
+
+### From DocTags
+
+`DoclingDocument` can be loaded from DocTags format (used by VLM pipelines):
+
+```python
+from docling_core.types.doc import DoclingDocument
+from docling_core.types.doc.document import DocTagsDocument
+
+doctags_doc = DocTagsDocument.from_doctags_and_image_pairs(
+    doctags_list, image_list
+)
+doc = DoclingDocument.load_from_doctags(doctag_document=doctags_doc)
+```
+
+## Document Hierarchy
+
+### Basic Nesting
+
+Items can be nested to represent document structure. For example, all content in the first page might be nested under a title item:
+
+![doc_hierarchy_1](../assets/docling_doc_hierarchy_1.png)
+
+In this example, all items on the first page are children of the title item at `#/texts/1`.
+
+### Grouping
+
+Complex structures like lists use group items to organize content:
+
+![doc_hierarchy_2](../assets/docling_doc_hierarchy_2.png)
+
+Here, items under the heading "Let's swim" (`#/texts/5`) include both text items and groups containing list elements. Group items are stored in the top-level `groups` field.
+
+## Accessing Content
+
+### Iterating Items
+
+The `iterate_items()` method traverses the document structure:
+
+```python
+for item, level in doc.iterate_items():
+    if isinstance(item, TextItem):
+        print(f"{'  ' * level}{item.label}: {item.text}")
+    elif isinstance(item, TableItem):
+        print(f"{'  ' * level}Table with {len(item.data.grid)} cells")
+```
+
+### Filtering by Type
+
+Access specific content types directly:
+
+```python
+# All text items
+for text_item in doc.texts:
+    print(text_item.text)
+
+# All tables
+for table in doc.tables:
+    print(f"Table: {table.data.num_rows}x{table.data.num_cols}")
+
+# All pictures
+for picture in doc.pictures:
+    print(f"Picture at {picture.prov[0].bbox}")
+```
+
+## Provenance Information
+
+Each `DocItem` can include provenance data showing its source location:
+
+```python
+for item in doc.texts:
+    for prov in item.prov:
+        print(f"Page {prov.page_no}: {prov.bbox}")
+        print(f"Character span: {prov.charspan}")
+```
+
+Provenance information includes:
+- **`page_no`**: Source page number
+- **`bbox`**: Bounding box coordinates on the page
+- **`charspan`**: Character offset range in the original text
+
+## Layout Information
+
+When available, layout details are preserved:
+
+```python
+for item in doc.texts:
+    if item.prov:
+        bbox = item.prov[0].bbox
+        print(f"Position: ({bbox.l}, {bbox.t}, {bbox.r}, {bbox.b})")
+```
+
+### Page Metadata
+
+Page-level information is stored in the `pages` dictionary:
+
+```python
+for page_no, page_item in doc.pages.items():
+    print(f"Page {page_no}: {page_item.size.width}x{page_item.size.height}")
+    if page_item.image:
+        # Page image is available
+        pass
+```
+
+## Export Methods
+
+`DoclingDocument` provides built-in export to common formats:
+
+### Markdown Export
+
+```python
+markdown = doc.export_to_markdown()
+print(markdown)
+```
+
+### HTML Export
+
+```python
+html = doc.export_to_html()
+```
+
+### Dictionary Export
+
+```python
+data = doc.export_to_dict()
+# Returns a dictionary representation of the document
+```
+
+### DocTags Export
+
+```python
+doctags = doc.export_to_doctags()
+```
+
+<Tip>
+These export methods are convenience wrappers that internally use serializers. For more control over serialization, see [Serialization Concepts](/concepts/serialization).
+</Tip>
+
+## Working with Tables
+
+`TableItem` instances include structured data:
+
+```python
+for table in doc.tables:
+    # Access table grid
+    for row in table.data.grid:
+        for cell in row:
+            print(cell.text, end="\t")
+        print()  # New row
+    
+    # Table dimensions
+    print(f"{table.data.num_rows} rows x {table.data.num_cols} columns")
+```
+
+## Concatenating Documents
+
+Multiple `DoclingDocument` instances can be merged:
+
+```python
+from docling_core.types.doc import DoclingDocument
+
+combined = DoclingDocument.concatenate(docs=[doc1, doc2, doc3])
+```
+
+This preserves hierarchy and updates page numbers accordingly.
+
+## Advanced Usage
+
+### Content Layers
+
+Items can be organized into different content layers:
+
+```python
+from docling_core.types.doc import ContentLayer
+
+for item, level in doc.iterate_items(
+    included_content_layers={ContentLayer.BODY, ContentLayer.TABLES}
+):
+    # Process only body and table items
+    pass
+```
+
+### Traversal Options
+
+```python
+for item, level in doc.iterate_items(
+    with_groups=True,              # Include group items
+    traverse_pictures=True,         # Descend into pictures
+    max_depth=3                     # Limit traversal depth
+):
+    process(item)
+```
+
+## JSON Pointers
+
+Docling uses JSON pointers for internal references:
+
+```python
+# Example: "#/texts/5" refers to the 6th text item (0-indexed)
+# Example: "#/groups/2" refers to the 3rd group item
+```
+
+These pointers enable efficient parent-child relationships without circular references.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Preserve provenance when modifying documents">
+    When creating or modifying items, maintain provenance information for traceability back to source pages.
+  </Accordion>
+  
+  <Accordion title="Use iterate_items() for traversal">
+    The `iterate_items()` method respects document hierarchy and reading order. Avoid directly iterating `doc.texts` or other lists when structure matters.
+  </Accordion>
+  
+  <Accordion title="Check item types before accessing attributes">
+    Use `isinstance()` checks when processing mixed content types to safely access type-specific attributes.
+  </Accordion>
+  
+  <Accordion title="Leverage export methods for common formats">
+    Use built-in export methods (`export_to_markdown()`, etc.) for standard use cases before implementing custom serialization.
+  </Accordion>
+</AccordionGroup>
+
+## Related Topics
+
+<CardGroup cols={2}>
+  <Card title="Serialization" icon="file-export" href="/concepts/serialization">
+    Learn how to serialize DoclingDocument to various formats
+  </Card>
+  
+  <Card title="Chunking" icon="scissors" href="/concepts/chunking">
+    Chunk documents for RAG and LLM applications
+  </Card>
+  
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Understand how DoclingDocument fits in Docling's architecture
+  </Card>
+  
+  <Card title="docling-core Source" icon="github" href="https://github.com/docling-project/docling-core/tree/main/docling_core/types/doc">
+    Explore the complete type definitions
+  </Card>
+</CardGroup>

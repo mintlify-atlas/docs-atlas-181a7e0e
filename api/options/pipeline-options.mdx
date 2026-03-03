@@ -1,0 +1,306 @@
+---
+title: PipelineOptions
+description: Base configuration for document processing pipelines
+---
+
+## Overview
+
+Base options classes that control Docling's document processing pipelines. All pipeline-specific options inherit from `PipelineOptions` and extend it with additional capabilities.
+
+## PipelineOptions
+
+Base configuration for all document processing pipelines.
+
+```python
+from docling.datamodel.pipeline_options import PipelineOptions
+
+options = PipelineOptions(
+    document_timeout=120.0,
+    enable_remote_services=False,
+    allow_external_plugins=False
+)
+```
+
+### Parameters
+
+<ParamField path="document_timeout" type="float | None" default="None">
+  Maximum processing time in seconds before aborting document conversion. When exceeded, the pipeline stops processing and returns partial results with PARTIAL_SUCCESS status. If None, no timeout is enforced.
+  
+  **Recommended:** 90-120 seconds for production systems.
+</ParamField>
+
+<ParamField path="accelerator_options" type="AcceleratorOptions" default="AcceleratorOptions()">
+  Hardware acceleration configuration for model inference. Controls GPU device selection, memory management, and execution optimization settings for layout, OCR, and table structure models.
+  
+  See [AcceleratorOptions](/api/options/accelerator-options) for details.
+</ParamField>
+
+<ParamField path="enable_remote_services" type="bool" default="False">
+  Allow pipeline to call external APIs or cloud services during processing. Required for API-based picture description models. Disabled by default for security and offline operation.
+</ParamField>
+
+<ParamField path="allow_external_plugins" type="bool" default="False">
+  Allow loading external third-party plugins for OCR, layout, table structure, or picture description models. Enables custom model implementations via plugin system. Disabled by default for security.
+</ParamField>
+
+<ParamField path="artifacts_path" type="Path | str | None" default="None">
+  Local directory containing pre-downloaded model artifacts (weights, configs). If None, models are fetched from remote sources on first use.
+  
+  Use `docling-tools models download` to pre-fetch artifacts for offline operation or faster initialization.
+</ParamField>
+
+## ConvertPipelineOptions
+
+Base configuration for document conversion pipelines.
+
+```python
+from docling.datamodel.pipeline_options import ConvertPipelineOptions
+
+options = ConvertPipelineOptions(
+    do_picture_description=True,
+    do_picture_classification=True
+)
+```
+
+### Parameters
+
+Inherits all parameters from [PipelineOptions](#pipelineoptions).
+
+<ParamField path="do_picture_classification" type="bool" default="False">
+  Enable picture classification to categorize images by type (photo, diagram, chart, etc.). Useful for downstream processing that requires image type awareness.
+</ParamField>
+
+<ParamField path="picture_classification_options" type="DocumentPictureClassifierOptions">
+  Configuration for picture classification model/runtime. Supports selecting transformers, onnxruntime, or remote api_kserve_v2 inference engines.
+</ParamField>
+
+<ParamField path="do_picture_description" type="bool" default="False">
+  Enable automatic generation of textual descriptions for pictures using vision-language models. Descriptions are added to the document for accessibility and searchability.
+</ParamField>
+
+<ParamField path="picture_description_options" type="PictureDescriptionBaseOptions">
+  Configuration for picture description model. Uses new preset system (recommended).
+  
+  **Default:** 'smolvlm' preset
+  
+  **Example:** `PictureDescriptionVlmEngineOptions.from_preset('granite_vision')`
+</ParamField>
+
+<ParamField path="do_chart_extraction" type="bool" default="False">
+  Extract data in tabular format from bar charts, pie charts, and line charts.
+</ParamField>
+
+## PdfPipelineOptions
+
+Configuration options for the PDF document processing pipeline.
+
+```python
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+
+options = PdfPipelineOptions(
+    do_ocr=True,
+    do_table_structure=True,
+    ocr_options=EasyOcrOptions(lang=["en"])
+)
+```
+
+### Parameters
+
+Inherits all parameters from [ConvertPipelineOptions](#convertpipelineoptions).
+
+<ParamField path="do_table_structure" type="bool" default="True">
+  Enable table structure extraction and reconstruction. Detects table regions, extracts cell content with row/column relationships, and reconstructs the logical table structure for downstream processing.
+</ParamField>
+
+<ParamField path="do_ocr" type="bool" default="True">
+  Enable Optical Character Recognition for scanned or image-based PDFs. Replaces or supplements programmatic text extraction with OCR-detected text. Required for scanned documents with no embedded text layer.
+  
+  **Note:** OCR significantly increases processing time.
+</ParamField>
+
+<ParamField path="do_code_enrichment" type="bool" default="False">
+  Enable specialized processing for code blocks. Applies code-aware OCR and formatting to improve accuracy of programming language snippets, terminal output, and structured code content.
+</ParamField>
+
+<ParamField path="do_formula_enrichment" type="bool" default="False">
+  Enable mathematical formula recognition and LaTeX conversion. Uses specialized models to detect and extract mathematical expressions, converting them to LaTeX format for accurate representation.
+</ParamField>
+
+<ParamField path="force_backend_text" type="bool" default="False">
+  Force use of PDF backend's native text extraction instead of layout model predictions. When enabled, bypasses the layout model's text detection and uses the embedded text from the PDF file directly.
+  
+  Useful for PDFs with reliable programmatic text layers.
+</ParamField>
+
+<ParamField path="table_structure_options" type="BaseTableStructureOptions" default="TableStructureOptions()">
+  Configuration for table structure extraction. Controls table detection accuracy, cell matching behavior, and table formatting.
+  
+  Only applicable when `do_table_structure=True`. See [TableStructureOptions](/api/options/table-structure-options).
+</ParamField>
+
+<ParamField path="ocr_options" type="OcrOptions" default="OcrAutoOptions()">
+  Configuration for OCR engine. Specifies which OCR engine to use (Tesseract, EasyOCR, RapidOCR, etc.) and engine-specific settings.
+  
+  Only applicable when `do_ocr=True`. See [OcrOptions](/api/options/ocr-options).
+</ParamField>
+
+<ParamField path="layout_options" type="BaseLayoutOptions" default="LayoutOptions()">
+  Configuration for document layout analysis model. Controls layout detection behavior including cluster creation for orphaned elements, cell assignment to table structures, and handling of empty regions.
+  
+  Specifies which layout model to use (default: Heron).
+</ParamField>
+
+<ParamField path="code_formula_options" type="CodeFormulaVlmOptions">
+  Configuration for code and formula extraction using VLM. Uses new preset system (recommended).
+  
+  **Default:** 'codeformulav2' preset
+  
+  Only applicable when `do_code_enrichment=True` or `do_formula_enrichment=True`.
+</ParamField>
+
+<ParamField path="images_scale" type="float" default="1.0">
+  Scaling factor for generated images. Higher values produce higher resolution but increase processing time and storage requirements.
+  
+  **Recommended values:**
+  - 1.0 (standard quality)
+  - 2.0 (high resolution)
+  - 0.5 (lower resolution for previews)
+</ParamField>
+
+<ParamField path="generate_page_images" type="bool" default="False">
+  Generate rendered page images during extraction. Creates PNG representations of each page for visual preview, validation, or downstream image-based machine learning tasks.
+</ParamField>
+
+<ParamField path="generate_picture_images" type="bool" default="False">
+  Extract and save embedded images from the PDF. Exports individual images (figures, photos, diagrams, charts) found in the document as separate image files for downstream use.
+</ParamField>
+
+<ParamField path="generate_parsed_pages" type="bool" default="False">
+  Retain intermediate parsed page representations after processing. When enabled, keeps detailed page-level parsing data structures for debugging or advanced post-processing.
+  
+  Increases memory usage. Automatically disabled after document assembly unless explicitly enabled.
+</ParamField>
+
+### Batching Options (Threaded Pipeline)
+
+<ParamField path="ocr_batch_size" type="int" default="4">
+  Batch size for OCR processing stage in threaded pipeline. Pages are grouped and processed together to improve throughput. Higher values increase GPU/CPU utilization but require more memory.
+  
+  Only used by `StandardPdfPipeline` (threaded mode).
+</ParamField>
+
+<ParamField path="layout_batch_size" type="int" default="4">
+  Batch size for layout analysis stage in threaded pipeline. Pages are grouped and processed together by the layout model. Higher values improve GPU utilization but require more memory.
+  
+  Only used by `StandardPdfPipeline` (threaded mode).
+</ParamField>
+
+<ParamField path="table_structure_batch_size" type="int" default="4">
+  Batch size for table structure extraction stage in threaded pipeline.
+  
+  Only used by `StandardPdfPipeline` (threaded mode).
+</ParamField>
+
+## PaginatedPipelineOptions
+
+Configuration for pipelines processing paginated documents.
+
+```python
+from docling.datamodel.pipeline_options import PaginatedPipelineOptions
+
+options = PaginatedPipelineOptions(
+    images_scale=2.0,
+    generate_page_images=True
+)
+```
+
+### Parameters
+
+Inherits all parameters from [ConvertPipelineOptions](#convertpipelineoptions).
+
+<ParamField path="images_scale" type="float" default="1.0">
+  Scaling factor for generated images. Higher values produce higher resolution but increase processing time and storage requirements.
+</ParamField>
+
+<ParamField path="generate_page_images" type="bool" default="False">
+  Generate rendered page images during extraction.
+</ParamField>
+
+<ParamField path="generate_picture_images" type="bool" default="False">
+  Extract and save embedded images from the document.
+</ParamField>
+
+## VlmPipelineOptions
+
+Pipeline configuration for vision-language model based document processing.
+
+```python
+from docling.datamodel.pipeline_options import VlmPipelineOptions, VlmConvertOptions
+
+options = VlmPipelineOptions(
+    vlm_options=VlmConvertOptions.from_preset("smoldocling")
+)
+```
+
+### Parameters
+
+Inherits all parameters from [PaginatedPipelineOptions](#paginatedpipelineoptions).
+
+<ParamField path="generate_page_images" type="bool" default="True">
+  Generate page images for VLM processing. Required for vision-language models to analyze document pages. Automatically enabled in VLM pipeline.
+</ParamField>
+
+<ParamField path="force_backend_text" type="bool" default="False">
+  Force use of backend's native text extraction instead of VLM predictions. When enabled, bypasses VLM text detection and uses embedded text from the document directly.
+</ParamField>
+
+<ParamField path="vlm_options" type="VlmConvertOptions | InlineVlmOptions | ApiVlmOptions">
+  Vision-Language Model configuration for document understanding. Uses new `VlmConvertOptions` with preset system (recommended).
+  
+  **Default:** 'granite_docling' preset
+  
+  **Example:** `VlmConvertOptions.from_preset('smoldocling')`
+  
+  Legacy `InlineVlmOptions`/`ApiVlmOptions` still supported.
+</ParamField>
+
+## AsrPipelineOptions
+
+Configuration options for the Automatic Speech Recognition (ASR) pipeline.
+
+```python
+from docling.datamodel.pipeline_options import AsrPipelineOptions
+from docling.datamodel import asr_model_specs
+
+options = AsrPipelineOptions(
+    asr_options=asr_model_specs.WHISPER_TINY
+)
+```
+
+This pipeline processes audio files and converts speech to text using Whisper-based models. Supports various audio formats (MP3, WAV, FLAC, etc.) and video files with audio tracks.
+
+### Parameters
+
+Inherits all parameters from [PipelineOptions](#pipelineoptions).
+
+<ParamField path="asr_options" type="InlineAsrOptions" default="asr_model_specs.WHISPER_TINY">
+  Automatic Speech Recognition (ASR) model configuration for audio transcription. Specifies which ASR model to use (e.g., Whisper variants) and model-specific parameters for speech-to-text conversion.
+</ParamField>
+
+## Notes
+
+<Note>
+  **Production Best Practices**
+  
+  - Enabling multiple features (OCR, table structure, formulas) increases processing time significantly. Enable only necessary features for your use case.
+  - For production systems processing large document volumes, implement timeout protection (90-120 seconds via `document_timeout` parameter).
+  - OCR requires system installation of engines (Tesseract, EasyOCR). Verify installation before enabling OCR via `do_ocr=True`.
+  - RapidOCR has known issues with read-only filesystems (e.g., Databricks). Consider Tesseract or alternative backends for distributed systems.
+</Note>
+
+## See Also
+
+- [OCR Options](/api/options/ocr-options) - OCR engine configuration
+- [Table Structure Options](/api/options/table-structure-options) - Table extraction settings
+- [Accelerator Options](/api/options/accelerator-options) - Hardware acceleration
+- [PDF Backend Options](/api/options/pdf-backend-options) - PDF parsing configuration

@@ -1,0 +1,166 @@
+---
+title: Multi-Format Conversion
+description: Convert mixed document types with format-specific settings
+---
+
+Process multiple file formats (PDF, DOCX, PPTX, HTML, images, etc.) with customized handling per format.
+
+## Overview
+
+This example shows how to:
+- Convert a mixed list of file formats
+- Restrict allowed formats with an explicit whitelist
+- Override pipeline and backend settings per format
+- Export results to Markdown, JSON, and YAML
+
+## Basic Multi-Format Conversion
+
+```python run_with_formats.py
+from pathlib import Path
+import json
+import yaml
+from docling.datamodel.base_models import InputFormat
+from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+from docling.document_converter import (
+    DocumentConverter,
+    PdfFormatOption,
+    WordFormatOption,
+)
+from docling.pipeline.simple_pipeline import SimplePipeline
+from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
+
+input_paths = [
+    Path("README.md"),
+    Path("tests/data/html/wiki_duck.html"),
+    Path("tests/data/docx/word_sample.docx"),
+    Path("tests/data/pptx/powerpoint_sample.pptx"),
+    Path("tests/data/2305.03393v1-pg9-img.png"),
+    Path("tests/data/pdf/2206.01062.pdf"),
+]
+```
+
+## Configure Format-Specific Options
+
+<Steps>
+  <Step title="Whitelist Formats">
+    Specify which formats to process. Non-matching files are ignored.
+  </Step>
+  
+  <Step title="Override Per-Format Settings">
+    Customize pipeline and backend for specific formats.
+  </Step>
+  
+  <Step title="Convert All Documents">
+    Process the mixed document list.
+  </Step>
+</Steps>
+
+```python
+doc_converter = DocumentConverter(
+    allowed_formats=[
+        InputFormat.PDF,
+        InputFormat.IMAGE,
+        InputFormat.DOCX,
+        InputFormat.HTML,
+        InputFormat.PPTX,
+        InputFormat.ASCIIDOC,
+        InputFormat.CSV,
+        InputFormat.MD,
+    ],
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            pipeline_cls=StandardPdfPipeline,
+            backend=PyPdfiumDocumentBackend
+        ),
+        InputFormat.DOCX: WordFormatOption(
+            pipeline_cls=SimplePipeline
+        ),
+    },
+)
+
+conv_results = doc_converter.convert_all(input_paths)
+```
+
+<Note>
+  Files not in `allowed_formats` are silently skipped during conversion.
+</Note>
+
+## Export Results
+
+```python
+output_dir = Path("scratch")
+output_dir.mkdir(parents=True, exist_ok=True)
+
+for res in conv_results:
+    doc_filename = res.input.file.stem
+    
+    # Export to Markdown
+    with (output_dir / f"{doc_filename}.md").open("w") as fp:
+        fp.write(res.document.export_to_markdown())
+    
+    # Export to JSON
+    with (output_dir / f"{doc_filename}.json").open("w") as fp:
+        fp.write(json.dumps(res.document.export_to_dict()))
+    
+    # Export to YAML
+    with (output_dir / f"{doc_filename}.yaml").open("w") as fp:
+        fp.write(yaml.safe_dump(res.document.export_to_dict()))
+    
+    print(f"Converted {res.input.file.name}")
+```
+
+## Format Options
+
+<CodeGroup>
+
+```python PDF with PyPdfium
+from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
+
+InputFormat.PDF: PdfFormatOption(
+    pipeline_cls=StandardPdfPipeline,
+    backend=PyPdfiumDocumentBackend
+)
+```
+
+```python DOCX with Simple Pipeline
+from docling.pipeline.simple_pipeline import SimplePipeline
+
+InputFormat.DOCX: WordFormatOption(
+    pipeline_cls=SimplePipeline
+)
+```
+
+```python Default Settings
+# Use default converter for all formats
+doc_converter = DocumentConverter()
+```
+
+</CodeGroup>
+
+## Supported Formats
+
+Docling supports:
+- **PDF**: Native and scanned PDFs
+- **DOCX**: Microsoft Word documents
+- **PPTX**: PowerPoint presentations
+- **HTML**: Web pages
+- **Images**: PNG, JPG, TIFF
+- **Markdown**: MD files
+- **AsciiDoc**: ASCIIDOC files
+- **CSV**: Comma-separated values
+
+## Default vs Custom Configuration
+
+```python
+# Default: No explicit configuration needed
+doc_converter = DocumentConverter()
+
+# Custom: Override specific formats
+doc_converter = DocumentConverter(
+    allowed_formats=[InputFormat.PDF, InputFormat.DOCX],
+    format_options={
+        InputFormat.PDF: PdfFormatOption(...),
+    },
+)
+```

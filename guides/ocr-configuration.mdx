@@ -1,0 +1,434 @@
+---
+title: OCR Configuration
+description: Configure optical character recognition for scanned documents with multiple engine options and language support
+---
+
+## Overview
+
+Docling supports multiple OCR (Optical Character Recognition) engines for extracting text from scanned PDFs and images:
+
+- **Tesseract**: Industry-standard, multilingual OCR
+- **EasyOCR**: Deep learning-based, 80+ languages
+- **RapidOCR**: Lightweight with multiple backend options
+- **macOS Vision**: Native Apple platform OCR
+- **Auto**: Automatically select the best available engine
+
+This guide shows you how to configure OCR for your use case.
+
+## Basic OCR Setup
+
+Enable OCR for PDF processing:
+
+```python
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    EasyOcrOptions,
+)
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,  # Enable OCR
+    ocr_options=EasyOcrOptions(
+        lang=["en", "fr", "de"],
+    ),
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+result = converter.convert("scanned_document.pdf")
+```
+
+## OCR Engines
+
+### Auto-detection
+
+Let Docling choose the best available engine:
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    OcrAutoOptions,
+)
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    ocr_options=OcrAutoOptions(),  # Auto-select engine
+)
+```
+
+<Note>
+Auto-detection tries engines in this order: EasyOCR → Tesseract → RapidOCR → macOS Vision (if available). It uses the first one found.
+</Note>
+
+### EasyOCR
+
+Deep learning-based OCR with GPU acceleration:
+
+<Steps>
+
+<Step title="Install EasyOCR">
+```bash
+pip install easyocr
+```
+</Step>
+
+<Step title="Configure EasyOCR">
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    EasyOcrOptions,
+)
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    ocr_options=EasyOcrOptions(
+        lang=["en", "fr", "de", "es"],  # Language codes
+        use_gpu=True,                    # Enable GPU (None = auto-detect)
+        confidence_threshold=0.5,        # Min confidence (0.0-1.0)
+        model_storage_directory=None,    # Custom model cache path
+        recog_network="standard",        # "standard" or "craft"
+        download_enabled=True,           # Allow model downloads
+    ),
+)
+```
+</Step>
+
+</Steps>
+
+**Supported Languages:** 80+ languages including English, French, German, Spanish, Chinese, Japanese, Korean, Arabic, and more. See [EasyOCR documentation](https://www.jaided.ai/easyocr/) for the full list.
+
+### Tesseract CLI
+
+Command-line Tesseract OCR:
+
+<Steps>
+
+<Step title="Install Tesseract">
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    brew install tesseract
+    brew install tesseract-lang  # For additional languages
+    ```
+  </Tab>
+  <Tab title="Ubuntu/Debian">
+    ```bash
+    sudo apt-get install tesseract-ocr
+    sudo apt-get install tesseract-ocr-fra  # French
+    sudo apt-get install tesseract-ocr-deu  # German
+    ```
+  </Tab>
+  <Tab title="Windows">
+    Download installer from [Tesseract GitHub](https://github.com/UB-Mannheim/tesseract/wiki)
+  </Tab>
+</Tabs>
+</Step>
+
+<Step title="Configure Tesseract CLI">
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TesseractCliOcrOptions,
+)
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    ocr_options=TesseractCliOcrOptions(
+        lang=["eng", "fra", "deu"],  # 3-letter ISO codes
+        tesseract_cmd="tesseract",   # Path to executable
+        path=None,                   # TESSDATA_PREFIX path
+        psm=None,                    # Page segmentation mode (0-13)
+    ),
+)
+```
+</Step>
+
+</Steps>
+
+**Language Codes:** Use 3-letter ISO 639-2 codes (e.g., `eng`, `fra`, `deu`, `spa`, `chi_sim`, `jpn`).
+
+### Tesseract (Python bindings)
+
+Tesseract via tesserocr library:
+
+<Steps>
+
+<Step title="Install tesserocr">
+```bash
+pip install tesserocr
+```
+
+<Note>
+tesserocr requires Tesseract to be installed system-wide (see Tesseract CLI installation above).
+</Note>
+</Step>
+
+<Step title="Configure tesserocr">
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TesseractOcrOptions,
+)
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    ocr_options=TesseractOcrOptions(
+        lang=["eng", "fra", "deu"],
+        path=None,  # TESSDATA_PREFIX
+        psm=None,   # Page segmentation mode
+    ),
+)
+```
+</Step>
+
+</Steps>
+
+### RapidOCR
+
+Lightweight OCR with multiple backend options:
+
+<Steps>
+
+<Step title="Install RapidOCR">
+```bash
+pip install rapidocr-onnxruntime  # ONNX backend (recommended)
+# OR
+pip install rapidocr-openvino     # Intel OpenVINO backend
+# OR
+pip install rapidocr-paddle       # PaddlePaddle backend
+```
+</Step>
+
+<Step title="Configure RapidOCR">
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    RapidOcrOptions,
+)
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    ocr_options=RapidOcrOptions(
+        lang=["english", "chinese"],  # Note: RapidOCR doesn't support lang selection yet
+        backend="onnxruntime",        # "onnxruntime", "openvino", "paddle", "torch"
+        text_score=0.5,               # Min confidence (0.0-1.0)
+        use_det=None,                 # Enable text detection
+        use_cls=None,                 # Enable text classification
+        use_rec=None,                 # Enable text recognition
+    ),
+)
+```
+</Step>
+
+</Steps>
+
+<Warning>
+RapidOCR has known issues with read-only filesystems (e.g., Databricks). Use Tesseract or EasyOCR in such environments.
+</Warning>
+
+### macOS Vision OCR
+
+Native macOS OCR using Apple's Vision framework:
+
+<Steps>
+
+<Step title="Install ocrmac (macOS only)">
+```bash
+pip install ocrmac
+```
+</Step>
+
+<Step title="Configure macOS OCR">
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    OcrMacOptions,
+)
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    ocr_options=OcrMacOptions(
+        lang=["en-US", "fr-FR", "de-DE"],  # Locale codes
+        recognition="accurate",            # "accurate" or "fast"
+        framework="vision",                # Only "vision" supported
+    ),
+)
+```
+</Step>
+
+</Steps>
+
+**Language Format:** Use `language-REGION` codes (e.g., `en-US`, `fr-FR`, `de-DE`, `es-ES`).
+
+## Full-Page OCR
+
+Force OCR on every page (even if PDF has embedded text):
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TesseractCliOcrOptions,
+)
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    ocr_options=TesseractCliOcrOptions(
+        force_full_page_ocr=True,  # OCR entire page
+        lang=["eng"],
+    ),
+)
+```
+
+<Note>
+Full-page OCR is slower but necessary for scanned documents with no embedded text layer. For hybrid PDFs (some pages scanned, some digital), Docling automatically detects which pages need OCR.
+</Note>
+
+## Bitmap Area Threshold
+
+Control when bitmaps trigger OCR:
+
+```python
+from docling.datamodel.pipeline_options import EasyOcrOptions
+
+ocr_options = EasyOcrOptions(
+    lang=["en"],
+    bitmap_area_threshold=0.05,  # OCR if bitmap covers >5% of page
+)
+```
+
+Lower values = more aggressive OCR. Range: 0.0 (always OCR bitmaps) to 1.0 (never OCR).
+
+## Language Detection Example
+
+Dynamically select languages based on detection:
+
+```python
+import pycountry
+from tesserocr import PyTessBaseAPI
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TesseractOcrOptions,
+)
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+def detect_languages(image):
+    """Detect languages in an image using Tesseract."""
+    with PyTessBaseAPI() as api:
+        api.SetImage(image)
+        detected = api.DetectOrientationScript()
+        # Convert script to language codes
+        # Implementation depends on your requirements
+        return ["eng", "fra"]  # Example
+
+# Detect language from first page
+from PIL import Image
+first_page_image = Image.open("first_page.png")
+detected_langs = detect_languages(first_page_image)
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    ocr_options=TesseractOcrOptions(
+        lang=detected_langs,
+    ),
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+```
+
+## Custom OCR Models
+
+Use custom-trained models:
+
+<Tabs>
+  <Tab title="RapidOCR">
+    ```python
+    from docling.datamodel.pipeline_options import RapidOcrOptions
+
+    ocr_options = RapidOcrOptions(
+        det_model_path="/path/to/custom_det_model.onnx",
+        cls_model_path="/path/to/custom_cls_model.onnx",
+        rec_model_path="/path/to/custom_rec_model.onnx",
+        rec_keys_path="/path/to/custom_keys.txt",
+    )
+    ```
+  </Tab>
+  <Tab title="EasyOCR">
+    ```python
+    from docling.datamodel.pipeline_options import EasyOcrOptions
+
+    ocr_options = EasyOcrOptions(
+        model_storage_directory="/path/to/custom/models",
+        recog_network="custom_network_name",
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## OCR Performance Comparison
+
+| Engine | Speed | Accuracy | GPU Support | Languages | Memory |
+|--------|-------|----------|-------------|-----------|--------|
+| **EasyOCR** | Medium | High | Yes | 80+ | High |
+| **Tesseract** | Fast | Medium-High | No | 100+ | Low |
+| **RapidOCR** | Fast | Medium | Limited | Limited | Low |
+| **macOS Vision** | Fast | High | Yes (MPS) | 20+ | Medium |
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="OCR is slow">
+    - Use GPU acceleration with EasyOCR: `use_gpu=True`
+    - Try RapidOCR for faster but slightly lower accuracy
+    - Reduce OCR batch size: `pipeline_options.ocr_batch_size=2`
+    - Use Tesseract for CPU-only environments
+  </Accordion>
+  
+  <Accordion title="Poor OCR accuracy">
+    - Increase image scale: `pipeline_options.images_scale=2.0`
+    - Use EasyOCR for better accuracy on complex layouts
+    - Try `force_full_page_ocr=True` for scanned documents
+    - Ensure correct language codes are specified
+  </Accordion>
+  
+  <Accordion title="Language not detected">
+    - Verify language data files are installed (Tesseract)
+    - Check language codes match engine requirements (ISO 639-2 for Tesseract, language names for EasyOCR)
+    - For EasyOCR, models download automatically on first use
+  </Accordion>
+  
+  <Accordion title="RapidOCR fails on Databricks">
+    RapidOCR writes temporary files which fails on read-only filesystems.
+    
+    **Solution:** Use Tesseract or EasyOCR instead:
+    ```python
+    ocr_options = TesseractCliOcrOptions(lang=["eng"])
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="PDF Processing" icon="file-pdf" href="/guides/pdf-processing">
+    Learn about PDF-specific features beyond OCR
+  </Card>
+  <Card title="VLM Models" icon="brain" href="/guides/vlm-models">
+    Use vision-language models as an alternative to OCR
+  </Card>
+  <Card title="Batch Processing" icon="layer-group" href="/guides/batch-processing">
+    Optimize OCR for large document batches
+  </Card>
+  <Card title="Advanced Options" icon="sliders" href="/guides/advanced-options">
+    Configure hardware acceleration and model caching
+  </Card>
+</CardGroup>

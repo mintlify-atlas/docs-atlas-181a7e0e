@@ -1,0 +1,182 @@
+---
+title: Batch Conversion
+description: Convert multiple documents in batch and export to various formats
+---
+
+Process multiple documents efficiently and export results in JSON, HTML, Markdown, text, doctags, and YAML formats.
+
+## Overview
+
+This example demonstrates:
+- Batch processing multiple PDF files
+- Exporting to multiple formats simultaneously
+- Handling conversion errors gracefully
+- Generating page images for HTML output
+
+## Basic Batch Conversion
+
+```python batch_convert.py
+from pathlib import Path
+import json
+import yaml
+from docling_core.types.doc import ImageRefMode
+from docling.datamodel.base_models import ConversionStatus, InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+input_doc_paths = [
+    Path("data/pdf/doc1.pdf"),
+    Path("data/pdf/doc2.pdf"),
+    Path("data/pdf/doc3.pdf"),
+]
+
+# Configure pipeline to generate page images for HTML
+pipeline_options = PdfPipelineOptions()
+pipeline_options.generate_page_images = True
+
+doc_converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+# Convert all documents
+conv_results = doc_converter.convert_all(
+    input_doc_paths,
+    raises_on_error=False,  # Continue processing even if some fail
+)
+```
+
+## Export to Multiple Formats
+
+<Steps>
+  <Step title="Process Results">
+    Iterate through conversion results and check status.
+  </Step>
+  
+  <Step title="Export Successful Documents">
+    Save each document in multiple formats using helper methods.
+  </Step>
+  
+  <Step title="Handle Errors">
+    Log failures and partial successes for debugging.
+  </Step>
+</Steps>
+
+```python
+output_dir = Path("scratch")
+output_dir.mkdir(parents=True, exist_ok=True)
+
+for conv_res in conv_results:
+    if conv_res.status == ConversionStatus.SUCCESS:
+        doc_filename = conv_res.input.file.stem
+        
+        # Export using helper methods
+        conv_res.document.save_as_json(
+            output_dir / f"{doc_filename}.json",
+            image_mode=ImageRefMode.PLACEHOLDER,
+        )
+        conv_res.document.save_as_html(
+            output_dir / f"{doc_filename}.html",
+            image_mode=ImageRefMode.EMBEDDED,
+        )
+        conv_res.document.save_as_markdown(
+            output_dir / f"{doc_filename}.md",
+            image_mode=ImageRefMode.PLACEHOLDER,
+        )
+        conv_res.document.save_as_markdown(
+            output_dir / f"{doc_filename}.txt",
+            image_mode=ImageRefMode.PLACEHOLDER,
+            strict_text=True,
+        )
+        conv_res.document.save_as_doctags(
+            output_dir / f"{doc_filename}.doctags.txt"
+        )
+        
+        # Export to YAML
+        with (output_dir / f"{doc_filename}.yaml").open("w") as fp:
+            fp.write(yaml.safe_dump(conv_res.document.export_to_dict()))
+    
+    elif conv_res.status == ConversionStatus.PARTIAL_SUCCESS:
+        print(f"Partial success: {conv_res.input.file}")
+        for item in conv_res.errors:
+            print(f"  Error: {item.error_message}")
+    else:
+        print(f"Failed: {conv_res.input.file}")
+```
+
+## Export Formats
+
+<CodeGroup>
+
+```python JSON
+conv_res.document.save_as_json(
+    output_dir / f"{doc_filename}.json",
+    image_mode=ImageRefMode.PLACEHOLDER,
+)
+```
+
+```python HTML with Embedded Images
+conv_res.document.save_as_html(
+    output_dir / f"{doc_filename}.html",
+    image_mode=ImageRefMode.EMBEDDED,
+)
+```
+
+```python Markdown
+conv_res.document.save_as_markdown(
+    output_dir / f"{doc_filename}.md",
+    image_mode=ImageRefMode.PLACEHOLDER,
+)
+```
+
+```python Plain Text
+conv_res.document.save_as_markdown(
+    output_dir / f"{doc_filename}.txt",
+    strict_text=True,
+)
+```
+
+```python Doctags
+conv_res.document.save_as_doctags(
+    output_dir / f"{doc_filename}.doctags.txt"
+)
+```
+
+```python YAML
+import yaml
+
+with (output_dir / f"{doc_filename}.yaml").open("w") as fp:
+    fp.write(yaml.safe_dump(conv_res.document.export_to_dict()))
+```
+
+</CodeGroup>
+
+<Note>
+  Set `pipeline_options.generate_page_images = True` to include page images in HTML exports.
+</Note>
+
+## Error Handling
+
+The batch conversion tracks:
+- **Success count**: Fully converted documents
+- **Partial success count**: Documents with warnings
+- **Failure count**: Failed conversions
+
+```python
+success_count = 0
+failure_count = 0
+partial_success_count = 0
+
+for conv_res in conv_results:
+    if conv_res.status == ConversionStatus.SUCCESS:
+        success_count += 1
+    elif conv_res.status == ConversionStatus.PARTIAL_SUCCESS:
+        partial_success_count += 1
+    else:
+        failure_count += 1
+
+print(f"Processed {success_count + partial_success_count + failure_count} docs")
+print(f"Failures: {failure_count}")
+print(f"Partial: {partial_success_count}")
+```

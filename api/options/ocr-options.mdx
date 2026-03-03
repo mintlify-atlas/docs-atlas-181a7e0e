@@ -1,0 +1,388 @@
+---
+title: OCR Options
+description: Configuration for Optical Character Recognition engines
+---
+
+## Overview
+
+OCR (Optical Character Recognition) options configure text extraction from images and scanned documents. Docling supports multiple OCR engines, each with different characteristics in terms of accuracy, speed, language support, and platform compatibility.
+
+## OcrOptions (Base)
+
+Base class for all OCR engine configurations.
+
+### Parameters
+
+<ParamField path="lang" type="list[str]" required>
+  List of OCR languages to use. The format must match the values of the OCR engine of choice.
+  
+  **Example:** `["deu", "eng"]`
+</ParamField>
+
+<ParamField path="force_full_page_ocr" type="bool" default="False">
+  If enabled, a full-page OCR is always applied, even when programmatic text is available.
+</ParamField>
+
+<ParamField path="bitmap_area_threshold" type="float" default="0.05">
+  Percentage of the page area for a bitmap to be processed with OCR. Range: 0.0-1.0.
+  
+  **Examples:** `0.05`, `0.1`
+</ParamField>
+
+## OcrAutoOptions
+
+Automatic OCR engine selection based on system availability.
+
+```python
+from docling.datamodel.pipeline_options import OcrAutoOptions
+
+ocr = OcrAutoOptions()
+```
+
+### Parameters
+
+<ParamField path="kind" type="Literal['auto']" default="'auto'">
+  OCR engine type identifier.
+</ParamField>
+
+<ParamField path="lang" type="list[str]" default="[]">
+  The automatic OCR engine will use the default values of the selected engine. Specify the engine explicitly to change language selection.
+</ParamField>
+
+## RapidOcrOptions
+
+Configuration for RapidOCR engine with multiple backend support.
+
+```python
+from docling.datamodel.pipeline_options import RapidOcrOptions
+
+ocr = RapidOcrOptions(
+    lang=["english", "chinese"],
+    backend="onnxruntime",
+    text_score=0.5
+)
+```
+
+### Parameters
+
+<ParamField path="kind" type="Literal['rapidocr']" default="'rapidocr'">
+  OCR engine type identifier.
+</ParamField>
+
+<ParamField path="lang" type="list[str]" default="['english', 'chinese']">
+  List of OCR languages. **Note:** RapidOCR does not currently support language selection; this parameter is reserved for future compatibility.
+</ParamField>
+
+<ParamField path="backend" type="Literal['onnxruntime', 'openvino', 'paddle', 'torch']" default="'onnxruntime'">
+  Inference backend for RapidOCR:
+  - `onnxruntime` - Default, cross-platform
+  - `openvino` - Intel optimization
+  - `paddle` - PaddlePaddle
+  - `torch` - PyTorch
+  
+  Choose based on your hardware and available libraries.
+</ParamField>
+
+<ParamField path="text_score" type="float" default="0.5">
+  Minimum confidence score for text detection. Text regions with scores below this threshold are filtered out.
+  
+  Range: 0.0-1.0. Lower values detect more text but may include false positives.
+</ParamField>
+
+<ParamField path="use_det" type="bool | None" default="None">
+  Enable text detection stage. If None, uses RapidOCR default behavior.
+</ParamField>
+
+<ParamField path="use_cls" type="bool | None" default="None">
+  Enable text direction classification stage. If None, uses RapidOCR default behavior.
+</ParamField>
+
+<ParamField path="use_rec" type="bool | None" default="None">
+  Enable text recognition stage. If None, uses RapidOCR default behavior.
+</ParamField>
+
+<ParamField path="print_verbose" type="bool" default="False">
+  Enable verbose logging output from RapidOCR for debugging purposes.
+</ParamField>
+
+<ParamField path="det_model_path" type="str | None" default="None">
+  Custom path to text detection model. If None, uses default RapidOCR model.
+</ParamField>
+
+<ParamField path="cls_model_path" type="str | None" default="None">
+  Custom path to text classification model. If None, uses default RapidOCR model.
+</ParamField>
+
+<ParamField path="rec_model_path" type="str | None" default="None">
+  Custom path to text recognition model. If None, uses default RapidOCR model.
+</ParamField>
+
+<ParamField path="rec_keys_path" type="str | None" default="None">
+  Custom path to recognition keys file. If None, uses default RapidOCR keys.
+</ParamField>
+
+<ParamField path="font_path" type="str | None" default="None">
+  Custom path to font file for text rendering in visualization.
+</ParamField>
+
+<ParamField path="rapidocr_params" type="dict[str, Any]" default="{}">
+  Additional parameters to pass through to RapidOCR engine. Use this to override or extend default RapidOCR configuration with engine-specific options.
+</ParamField>
+
+### References
+
+- [RapidOCR API Documentation](https://rapidai.github.io/RapidOCRDocs/install_usage/api/RapidOCR/)
+- [RapidOCR Usage Guide](https://rapidai.github.io/RapidOCRDocs/main/install_usage/rapidocr/usage/#__tabbed_3_4)
+
+## EasyOcrOptions
+
+Configuration for EasyOCR engine.
+
+```python
+from docling.datamodel.pipeline_options import EasyOcrOptions
+
+ocr = EasyOcrOptions(
+    lang=["en", "fr", "de"],
+    use_gpu=True,
+    confidence_threshold=0.5
+)
+```
+
+### Parameters
+
+<ParamField path="kind" type="Literal['easyocr']" default="'easyocr'">
+  OCR engine type identifier.
+</ParamField>
+
+<ParamField path="lang" type="list[str]" default="['fr', 'de', 'es', 'en']">
+  List of language codes for OCR. EasyOCR supports 80+ languages. Use ISO 639-1 codes (e.g., `en`, `fr`, `de`).
+  
+  Multiple languages can be specified for multilingual documents.
+</ParamField>
+
+<ParamField path="use_gpu" type="bool | None" default="None">
+  Enable GPU acceleration for EasyOCR. If None, automatically detects and uses GPU if available. Set to False to force CPU-only processing.
+</ParamField>
+
+<ParamField path="confidence_threshold" type="float" default="0.5">
+  Minimum confidence score for text recognition. Text with confidence below this threshold is filtered out.
+  
+  Range: 0.0-1.0. Lower values include more text but may reduce accuracy.
+</ParamField>
+
+<ParamField path="model_storage_directory" type="str | None" default="None">
+  Directory path for storing downloaded EasyOCR models. If None, uses default EasyOCR cache location.
+  
+  Useful for offline environments or custom model management.
+</ParamField>
+
+<ParamField path="recog_network" type="str | None" default="'standard'">
+  Recognition network architecture to use:
+  - `standard` - Default, balanced performance
+  - `craft` - Higher accuracy
+  
+  Different networks may perform better on specific document types.
+</ParamField>
+
+<ParamField path="download_enabled" type="bool" default="True">
+  Allow automatic download of EasyOCR models on first use. Disable for offline environments where models must be pre-installed.
+</ParamField>
+
+<ParamField path="suppress_mps_warnings" type="bool" default="True">
+  Suppress Metal Performance Shaders (MPS) warnings on macOS. Reduces console noise when using Apple Silicon GPUs with EasyOCR.
+</ParamField>
+
+## TesseractCliOcrOptions
+
+Configuration for Tesseract OCR via command-line interface.
+
+```python
+from docling.datamodel.pipeline_options import TesseractCliOcrOptions
+
+ocr = TesseractCliOcrOptions(
+    lang=["eng", "fra", "deu"],
+    tesseract_cmd="tesseract",
+    psm=3
+)
+```
+
+### Parameters
+
+<ParamField path="kind" type="Literal['tesseract']" default="'tesseract'">
+  OCR engine type identifier.
+</ParamField>
+
+<ParamField path="lang" type="list[str]" default="['fra', 'deu', 'spa', 'eng']">
+  List of Tesseract language codes. Use 3-letter ISO 639-2 codes (e.g., `eng`, `fra`, `deu`).
+  
+  Multiple languages enable multilingual OCR. Requires corresponding Tesseract language data files.
+</ParamField>
+
+<ParamField path="tesseract_cmd" type="str" default="'tesseract'">
+  Command or path to Tesseract executable. Use `tesseract` if in system PATH, or provide full path for custom installations.
+  
+  **Example:** `/usr/local/bin/tesseract`
+</ParamField>
+
+<ParamField path="path" type="str | None" default="None">
+  Path to Tesseract data directory containing language files. If None, uses Tesseract's default TESSDATA_PREFIX location.
+</ParamField>
+
+<ParamField path="psm" type="int | None" default="None">
+  Page Segmentation Mode for Tesseract. Values 0-13 control how Tesseract segments the page.
+  
+  **Common values:**
+  - `3` - Automatic (default)
+  - `6` - Uniform block of text
+  - `11` - Sparse text
+  
+  If None, uses Tesseract default.
+</ParamField>
+
+## TesseractOcrOptions
+
+Configuration for Tesseract OCR via Python bindings (tesserocr).
+
+```python
+from docling.datamodel.pipeline_options import TesseractOcrOptions
+
+ocr = TesseractOcrOptions(
+    lang=["eng", "fra"],
+    psm=3
+)
+```
+
+### Parameters
+
+<ParamField path="kind" type="Literal['tesserocr']" default="'tesserocr'">
+  OCR engine type identifier.
+</ParamField>
+
+<ParamField path="lang" type="list[str]" default="['fra', 'deu', 'spa', 'eng']">
+  List of Tesseract language codes. Use 3-letter ISO 639-2 codes.
+</ParamField>
+
+<ParamField path="path" type="str | None" default="None">
+  Path to Tesseract data directory containing language files.
+</ParamField>
+
+<ParamField path="psm" type="int | None" default="None">
+  Page Segmentation Mode for Tesseract. Values 0-13.
+</ParamField>
+
+## OcrMacOptions
+
+Configuration for native macOS OCR using Vision framework.
+
+```python
+from docling.datamodel.pipeline_options import OcrMacOptions
+
+ocr = OcrMacOptions(
+    lang=["en-US", "fr-FR"],
+    recognition="accurate"
+)
+```
+
+### Parameters
+
+<ParamField path="kind" type="Literal['ocrmac']" default="'ocrmac'">
+  OCR engine type identifier.
+</ParamField>
+
+<ParamField path="lang" type="list[str]" default="['fr-FR', 'de-DE', 'es-ES', 'en-US']">
+  List of language locale codes for macOS OCR. Use format `language-REGION` (e.g., `en-US`, `fr-FR`).
+  
+  Leverages native macOS Vision framework for OCR on Apple platforms.
+</ParamField>
+
+<ParamField path="recognition" type="str" default="'accurate'">
+  Recognition accuracy level:
+  - `accurate` - Higher quality, slower
+  - `fast` - Lower quality, faster
+  
+  Choose based on speed vs. accuracy requirements.
+</ParamField>
+
+<ParamField path="framework" type="str" default="'vision'">
+  macOS framework to use for OCR. Currently supports `vision` (Apple Vision framework).
+  
+  Future versions may support additional frameworks.
+</ParamField>
+
+## Usage Examples
+
+### With Pipeline Options
+
+```python
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions, EasyOcrOptions
+
+pipeline_options = PdfPipelineOptions(
+    do_ocr=True,
+    ocr_options=EasyOcrOptions(
+        lang=["en", "de"],
+        use_gpu=True
+    )
+)
+
+converter = DocumentConverter(
+    format_options={
+        PdfFormatOption: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+```
+
+### Switching OCR Engines
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TesseractCliOcrOptions,
+    RapidOcrOptions
+)
+
+# Use Tesseract
+tesseract_pipeline = PdfPipelineOptions(
+    do_ocr=True,
+    ocr_options=TesseractCliOcrOptions(lang=["eng"])
+)
+
+# Use RapidOCR
+rapid_pipeline = PdfPipelineOptions(
+    do_ocr=True,
+    ocr_options=RapidOcrOptions(backend="onnxruntime")
+)
+```
+
+## Comparison Table
+
+| Engine | Speed | Accuracy | GPU Support | Languages | Platform |
+|--------|-------|----------|-------------|-----------|----------|
+| **EasyOCR** | Medium | High | Yes | 80+ | All |
+| **Tesseract** | Fast | Medium-High | No | 100+ | All |
+| **RapidOCR** | Very Fast | Medium | Backend-dependent | Limited | All |
+| **OcrMac** | Fast | High | Yes (MPS) | macOS supported | macOS only |
+
+## Notes
+
+<Note>
+  **Installation Requirements**
+  
+  Most OCR engines require additional system dependencies:
+  
+  - **Tesseract**: Install via system package manager (`apt-get install tesseract-ocr`, `brew install tesseract`)
+  - **EasyOCR**: Automatically downloads models on first use
+  - **RapidOCR**: Requires `rapidocr-onnxruntime` or backend-specific package
+  - **OcrMac**: Built-in on macOS, no installation needed
+</Note>
+
+<Warning>
+  **RapidOCR Known Issues**
+  
+  RapidOCR has known issues with read-only filesystems (e.g., Databricks). Consider Tesseract or alternative backends for distributed systems.
+</Warning>
+
+## See Also
+
+- [Pipeline Options](/api/options/pipeline-options) - Pipeline configuration
+- [PDF Backend](/api/backends/pdf) - PDF processing architecture

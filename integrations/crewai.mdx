@@ -1,0 +1,270 @@
+---
+title: Crew AI Integration
+description: Use Docling as a knowledge source in Crew AI for multi-agent AI applications
+---
+
+Docling is available in [Crew AI](https://www.crewai.com/) as the `CrewDoclingSource` knowledge source, enabling multi-agent AI systems to access and process document content with high fidelity.
+
+## Overview
+
+The Crew AI Docling integration provides:
+
+- Document processing as a knowledge source for AI agents
+- High-fidelity extraction of content, tables, and structure
+- Seamless integration with Crew AI's knowledge system
+- Support for multiple document formats
+
+## Installation
+
+```bash
+pip install crewai docling
+```
+
+## Quick Start
+
+Here's how to use Docling as a knowledge source in Crew AI:
+
+```python
+from crewai import Agent, Task, Crew
+from crewai.knowledge.source.crew_docling_source import CrewDoclingSource
+
+# Create a Docling knowledge source
+knowledge_source = CrewDoclingSource(
+    file_paths=["document.pdf"]
+)
+
+# Create an agent with the knowledge source
+agent = Agent(
+    role="Research Analyst",
+    goal="Analyze documents and extract key insights",
+    backstory="You are an expert at analyzing complex documents.",
+    knowledge_sources=[knowledge_source]
+)
+
+# Create a task
+task = Task(
+    description="Summarize the main findings from the document",
+    agent=agent,
+    expected_output="A concise summary of key findings"
+)
+
+# Create and run the crew
+crew = Crew(
+    agents=[agent],
+    tasks=[task]
+)
+
+result = crew.kickoff()
+print(result)
+```
+
+## Multi-Agent Document Analysis
+
+```python
+from crewai import Agent, Task, Crew
+from crewai.knowledge.source.crew_docling_source import CrewDoclingSource
+
+# Create knowledge source
+knowledge_source = CrewDoclingSource(
+    file_paths=["report.pdf", "analysis.docx"]
+)
+
+# Create specialized agents
+researcher = Agent(
+    role="Document Researcher",
+    goal="Extract and organize information from documents",
+    backstory="Expert at finding relevant information in complex documents",
+    knowledge_sources=[knowledge_source]
+)
+
+analyst = Agent(
+    role="Data Analyst",
+    goal="Analyze extracted data and identify patterns",
+    backstory="Specialist in data analysis and pattern recognition",
+    knowledge_sources=[knowledge_source]
+)
+
+writer = Agent(
+    role="Technical Writer",
+    goal="Create comprehensive reports based on analysis",
+    backstory="Skilled at synthesizing complex information into clear reports"
+)
+
+# Define tasks
+research_task = Task(
+    description="Extract all key data points and findings from the documents",
+    agent=researcher,
+    expected_output="Structured list of key findings and data"
+)
+
+analysis_task = Task(
+    description="Analyze the extracted data for trends and insights",
+    agent=analyst,
+    expected_output="Analysis report with identified trends",
+    context=[research_task]
+)
+
+writing_task = Task(
+    description="Write a comprehensive report combining research and analysis",
+    agent=writer,
+    expected_output="Final comprehensive report",
+    context=[research_task, analysis_task]
+)
+
+# Create and run crew
+crew = Crew(
+    agents=[researcher, analyst, writer],
+    tasks=[research_task, analysis_task, writing_task],
+    verbose=True
+)
+
+result = crew.kickoff()
+```
+
+## Processing Multiple Document Types
+
+```python
+from crewai.knowledge.source.crew_docling_source import CrewDoclingSource
+
+# Process various document formats
+knowledge_source = CrewDoclingSource(
+    file_paths=[
+        "financial_report.pdf",
+        "presentation.pptx",
+        "analysis.docx",
+        "data.html"
+    ]
+)
+
+agent = Agent(
+    role="Document Analyzer",
+    goal="Analyze documents across different formats",
+    backstory="Expert at processing various document types",
+    knowledge_sources=[knowledge_source]
+)
+```
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="Multi-Agent Support" icon="users">
+    Share document knowledge across multiple agents
+  </Card>
+  <Card title="High-Fidelity Processing" icon="magnifying-glass">
+    Accurate extraction of text, tables, and structure
+  </Card>
+  <Card title="Format Support" icon="file">
+    Process PDF, DOCX, PPTX, HTML, and more
+  </Card>
+  <Card title="Knowledge Integration" icon="brain">
+    Seamless integration with Crew AI's knowledge system
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+### Document-Based Research
+
+```python
+# Research agent that analyzes academic papers
+knowledge_source = CrewDoclingSource(
+    file_paths=["paper1.pdf", "paper2.pdf", "paper3.pdf"]
+)
+
+research_agent = Agent(
+    role="Academic Researcher",
+    goal="Analyze research papers and identify key contributions",
+    backstory="PhD-level researcher with expertise in literature review",
+    knowledge_sources=[knowledge_source]
+)
+
+task = Task(
+    description="Compare methodologies across the three papers",
+    agent=research_agent,
+    expected_output="Comparative analysis of methodologies"
+)
+```
+
+### Compliance Analysis
+
+```python
+# Compliance agent that checks documents against regulations
+knowledge_source = CrewDoclingSource(
+    file_paths=["contract.pdf", "policy.docx"]
+)
+
+compliance_agent = Agent(
+    role="Compliance Officer",
+    goal="Ensure documents meet regulatory requirements",
+    backstory="Expert in regulatory compliance and risk assessment",
+    knowledge_sources=[knowledge_source]
+)
+
+task = Task(
+    description="Review documents for compliance issues",
+    agent=compliance_agent,
+    expected_output="Compliance assessment report"
+)
+```
+
+## Integration Benefits
+
+<Steps>
+  <Step title="Native Integration">
+    Built-in support as an official Crew AI knowledge source
+  </Step>
+  <Step title="Agent Collaboration">
+    Multiple agents can access the same document knowledge
+  </Step>
+  <Step title="Automatic Processing">
+    Documents are processed automatically when agents need them
+  </Step>
+  <Step title="Context Preservation">
+    Maintains document structure and context for better agent understanding
+  </Step>
+</Steps>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Crew AI Docs" icon="book" href="https://docs.crewai.com/concepts/knowledge">
+    Knowledge source documentation
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/crewAIInc/crewAI/">
+    Crew AI repository
+  </Card>
+  <Card title="PyPI" icon="box" href="https://pypi.org/project/crewai/">
+    Crew AI package
+  </Card>
+  <Card title="Examples" icon="code" href="https://docs.crewai.com/examples">
+    Crew AI examples
+  </Card>
+</CardGroup>
+
+## Advanced Configuration
+
+```python
+from crewai.knowledge.source.crew_docling_source import CrewDoclingSource
+
+# Configure Docling processing options
+knowledge_source = CrewDoclingSource(
+    file_paths=["document.pdf"],
+    # Additional Docling options can be configured here
+)
+
+# Use with agents
+agent = Agent(
+    role="Document Expert",
+    goal="Process documents with custom settings",
+    backstory="Specialist in document processing",
+    knowledge_sources=[knowledge_source],
+    verbose=True
+)
+```
+
+## Next Steps
+
+- Explore [Crew AI knowledge documentation](https://docs.crewai.com/concepts/knowledge)
+- Learn about [building multi-agent systems](https://docs.crewai.com/)
+- Understand [document conversion options](../usage/conversion)
+- Check out [Crew AI examples](https://docs.crewai.com/examples)

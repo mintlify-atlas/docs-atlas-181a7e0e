@@ -1,0 +1,262 @@
+---
+title: Document Translation
+description: Translate extracted text content and regenerate documents
+---
+
+Translate text elements and table cells in documents while preserving structure and embedded images.
+
+## Overview
+
+This example demonstrates:
+- Converting PDFs with image generation
+- Translating text elements and table cells
+- Preserving document structure during translation
+- Saving original and translated Markdown with embedded images
+
+## Basic Translation Setup
+
+```python translate.py
+from pathlib import Path
+from docling_core.types.doc import ImageRefMode, TableItem, TextItem
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+IMAGE_RESOLUTION_SCALE = 2.0
+
+input_doc_path = Path("document.pdf")
+output_dir = Path("scratch")
+output_dir.mkdir(parents=True, exist_ok=True)
+
+# Configure pipeline to preserve images
+pipeline_options = PdfPipelineOptions()
+pipeline_options.images_scale = IMAGE_RESOLUTION_SCALE
+pipeline_options.generate_page_images = True
+pipeline_options.generate_picture_images = True
+
+doc_converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+conv_res = doc_converter.convert(input_doc_path)
+```
+
+<Note>
+  Setting `images_scale` preserves images during conversion. Without this, images are discarded to save memory.
+</Note>
+
+## Translation Function
+
+<Steps>
+  <Step title="Define Translation Function">
+    Create a `translate()` function using your preferred translation API.
+  </Step>
+  
+  <Step title="Iterate Document Elements">
+    Loop through TextItems and TableItems.
+  </Step>
+  
+  <Step title="Translate Content">
+    Apply translation to text while preserving structure.
+  </Step>
+  
+  <Step title="Export Results">
+    Save both original and translated documents.
+  </Step>
+</Steps>
+
+```python
+def translate(text: str, src: str = "en", dest: str = "de") -> str:
+    """
+    Translate text using your preferred translation service.
+    
+    Replace this with your actual translation implementation:
+    - Google Translate API
+    - DeepL API
+    - OpenAI API
+    - Azure Translator
+    - etc.
+    """
+    # Example with googletrans (uncomment to use):
+    # from googletrans import Translator
+    # translator = Translator()
+    # translated = translator.translate(text, src=src, dest=dest)
+    # return translated.text
+    
+    # Placeholder - replace with actual translation
+    print("Warning: Using placeholder translation function")
+    return text
+```
+
+## Translate Document
+
+```python
+conv_doc = conv_res.document
+doc_filename = conv_res.input.file.name
+
+# Save original
+md_filename = output_dir / f"{doc_filename}-orig.md"
+conv_doc.save_as_markdown(md_filename, image_mode=ImageRefMode.EMBEDDED)
+
+# Translate all text elements
+for element, _level in conv_res.document.iterate_items():
+    if isinstance(element, TextItem):
+        element.orig = element.text  # Store original
+        element.text = translate(text=element.text, src="en", dest="de")
+    
+    elif isinstance(element, TableItem):
+        for cell in element.data.table_cells:
+            cell.text = translate(text=cell.text, src="en", dest="de")
+
+# Save translated version
+md_filename = output_dir / f"{doc_filename}-translated.md"
+conv_doc.save_as_markdown(md_filename, image_mode=ImageRefMode.EMBEDDED)
+```
+
+## Translation API Examples
+
+<CodeGroup>
+
+```python Google Translate
+from googletrans import Translator
+
+def translate(text: str, src: str = "en", dest: str = "de") -> str:
+    translator = Translator()
+    translated = translator.translate(text, src=src, dest=dest)
+    return translated.text
+```
+
+```python DeepL
+import deepl
+
+translator = deepl.Translator(auth_key="YOUR_API_KEY")
+
+def translate(text: str, src: str = "en", dest: str = "de") -> str:
+    result = translator.translate_text(
+        text,
+        source_lang=src.upper(),
+        target_lang=dest.upper()
+    )
+    return result.text
+```
+
+```python OpenAI
+import openai
+
+def translate(text: str, src: str = "en", dest: str = "de") -> str:
+    response = openai.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": f"Translate from {src} to {dest}"},
+            {"role": "user", "content": text}
+        ]
+    )
+    return response.choices[0].message.content
+```
+
+```python Azure Translator
+import requests
+
+def translate(text: str, src: str = "en", dest: str = "de") -> str:
+    endpoint = "https://api.cognitive.microsofttranslator.com"
+    path = "/translate"
+    constructed_url = endpoint + path
+    
+    params = {
+        'api-version': '3.0',
+        'from': src,
+        'to': dest
+    }
+    
+    headers = {
+        'Ocp-Apim-Subscription-Key': 'YOUR_KEY',
+        'Content-type': 'application/json',
+    }
+    
+    body = [{'text': text}]
+    response = requests.post(constructed_url, params=params, headers=headers, json=body)
+    return response.json()[0]['translations'][0]['text']
+```
+
+</CodeGroup>
+
+## Complete Example
+
+```python
+from pathlib import Path
+from docling_core.types.doc import ImageRefMode, TableItem, TextItem
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+def translate(text: str, src: str = "en", dest: str = "de") -> str:
+    """Replace with your translation implementation."""
+    # Your translation code here
+    return text
+
+def translate_document(input_path: Path, output_dir: Path, src: str = "en", dest: str = "de"):
+    """Translate a PDF document."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Configure pipeline
+    pipeline_options = PdfPipelineOptions()
+    pipeline_options.images_scale = 2.0
+    pipeline_options.generate_page_images = True
+    pipeline_options.generate_picture_images = True
+    
+    # Convert document
+    doc_converter = DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+        }
+    )
+    
+    conv_res = doc_converter.convert(input_path)
+    doc_filename = conv_res.input.file.name
+    
+    # Save original
+    orig_path = output_dir / f"{doc_filename}-{src}.md"
+    conv_res.document.save_as_markdown(orig_path, image_mode=ImageRefMode.EMBEDDED)
+    print(f"Saved original: {orig_path}")
+    
+    # Translate
+    for element, _level in conv_res.document.iterate_items():
+        if isinstance(element, TextItem):
+            element.text = translate(element.text, src=src, dest=dest)
+        elif isinstance(element, TableItem):
+            for cell in element.data.table_cells:
+                cell.text = translate(cell.text, src=src, dest=dest)
+    
+    # Save translated
+    trans_path = output_dir / f"{doc_filename}-{dest}.md"
+    conv_res.document.save_as_markdown(trans_path, image_mode=ImageRefMode.EMBEDDED)
+    print(f"Saved translated: {trans_path}")
+
+if __name__ == "__main__":
+    translate_document(
+        input_path=Path("document.pdf"),
+        output_dir=Path("scratch"),
+        src="en",
+        dest="de"
+    )
+```
+
+## Requirements
+
+- Python 3.9+
+- `docling` package
+- Translation API library (googletrans, deepl, openai, etc.)
+
+```bash
+# Install Docling
+pip install docling
+
+# Install translation library of choice
+pip install googletrans==4.0.0rc1  # Google Translate
+# or
+pip install deepl  # DeepL
+# or
+pip install openai  # OpenAI
+```

@@ -1,0 +1,525 @@
+---
+title: Model Catalog
+description: Comprehensive catalog of all models, inference engines, and processing stages available in Docling
+---
+
+## Overview
+
+Docling's document processing pipeline consists of multiple stages, each using specialized models and inference engines. This catalog provides:
+
+- Processing stages and their purposes
+- Model families and specific models
+- Inference engine compatibility
+- Usage examples and configuration
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:1
+
+## Processing Stages
+
+Docling pipelines are composed of these processing stages:
+
+<CardGroup cols={3}>
+  <Card title="Layout" icon="layer-group">
+    Document structure detection
+  </Card>
+  <Card title="OCR" icon="text">
+    Optical character recognition
+  </Card>
+  <Card title="Table Structure" icon="table">
+    Table cell recognition
+  </Card>
+  <Card title="Picture Classifier" icon="image">
+    Image type classification
+  </Card>
+  <Card title="VLM Convert" icon="brain">
+    Full page conversion with VLMs
+  </Card>
+  <Card title="Picture Description" icon="comment">
+    Image captioning
+  </Card>
+  <Card title="Code & Formula" icon="code">
+    Code/math extraction
+  </Card>
+</CardGroup>
+
+## Layout Detection
+
+### Overview
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:26
+
+Detects document elements (paragraphs, tables, figures, headers, etc.) using RT-DETR-based object detection.
+
+**Model Family**: Object Detection (RT-DETR based)  
+**Inference Engine**: docling-ibm-models  
+**Supported Devices**: CPU, CUDA, MPS, XPU
+
+### Available Models
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:30
+
+| Model | Status | Description |
+|-------|--------|-------------|
+| `docling-layout-heron` | ⭐ Default | Recommended for most use cases |
+| `docling-layout-heron-101` | - | Enhanced variant of Heron |
+| `docling-layout-egret-medium` | - | Medium-sized Egret model |
+| `docling-layout-egret-large` | - | Larger Egret model |
+| `docling-layout-egret-xlarge` | - | Extra-large Egret model |
+| `docling-layout-v2` | Legacy | Previous generation model |
+
+### Usage
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:252
+
+```python
+from docling.datamodel.pipeline_options import LayoutOptions
+from docling.datamodel.layout_model_specs import DOCLING_LAYOUT_HERON
+
+# Use Heron layout model (default)
+layout_options = LayoutOptions(
+    model_spec=DOCLING_LAYOUT_HERON
+)
+```
+
+### Output
+
+Bounding boxes with element labels:
+- `TEXT` - Body text paragraphs
+- `SECTION_HEADER` - Section headings
+- `TABLE` - Tables
+- `PICTURE` - Images and figures
+- `LIST_ITEM` - List items
+- `FORMULA` - Mathematical formulas
+- `PAGE_HEADER` / `PAGE_FOOTER` - Headers/footers
+
+## OCR (Optical Character Recognition)
+
+### Overview
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:51
+
+Extracts text from images and scanned documents using various OCR engines.
+
+**Model Family**: Multiple OCR Engines  
+**Inference Engines**: Engine-specific  
+**Supported Devices**: Varies by engine
+
+### Available Engines
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:206
+
+| OCR Engine | Backend | Languages | GPU Support | Notes |
+|------------|---------|-----------|-------------|-------|
+| **Auto** ⭐ | Automatic | Varies | Varies | Automatically selects best available |
+| **Tesseract** | CLI or Python | 100+ | No | Most widely used, good accuracy |
+| **EasyOCR** | PyTorch | 80+ | Yes | GPU-accelerated, good for Asian languages |
+| **RapidOCR** | ONNX/OpenVINO/Paddle | Multiple | Yes (torch) | Fast, multiple backend options |
+| **macOS Vision** | Native macOS | 20+ | Yes | macOS only, excellent quality |
+| **SuryaOCR** | PyTorch | 90+ | Yes | Modern, good for complex layouts |
+
+### Usage
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:286
+
+```python
+from docling.datamodel.pipeline_options import (
+    TesseractOcrOptions,
+    RapidOcrOptions
+)
+
+# Tesseract with multiple languages
+ocr_options = TesseractOcrOptions(
+    lang=["eng", "deu"]  # English and German
+)
+
+# RapidOCR with GPU acceleration
+ocr_options = RapidOcrOptions(
+    backend="torch",  # GPU-accelerated
+    lang=["en"]
+)
+```
+
+## Table Structure Recognition
+
+### TableFormer Models
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:70
+
+Recognizes table structure (rows, columns, cells) and relationships.
+
+**Model Family**: TableFormer  
+**Inference Engine**: docling-ibm-models  
+**Supported Devices**: CPU, CUDA, XPU (MPS currently disabled)
+
+### Available Modes
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:74
+
+| Mode | Status | Speed | Accuracy |
+|------|--------|-------|----------|
+| **Accurate** | ⭐ Default | Slower | Higher quality |
+| **Fast** | - | Faster | Good quality |
+
+### Usage
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:263
+
+```python
+from docling.datamodel.pipeline_options import (
+    TableStructureOptions,
+    TableFormerMode
+)
+
+# Use accurate mode for best quality
+table_options = TableStructureOptions(
+    mode=TableFormerMode.ACCURATE,
+    do_cell_matching=True  # Align cells with content
+)
+```
+
+### Object Detection (WIP)
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:86
+
+Alternative approach for table structure recognition using object detection.
+
+<Note>
+Object detection-based table structure is **work in progress**.
+</Note>
+
+## Picture Classification
+
+### Overview
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:101
+
+Classifies pictures into semantic categories (charts, diagrams, logos, etc.).
+
+**Model Family**: Image Classifier (Vision Transformer)  
+**Inference Engine**: Transformers (ViT)  
+**Supported Devices**: CPU, CUDA, MPS, XPU
+
+### Available Models
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:104
+
+| Model | Status | Description |
+|-------|--------|-------------|
+| `DocumentFigureClassifier-v2.0` | ⭐ Default | Specialized for document imagery |
+
+**Model Card**: [ds4sd/DocumentFigureClassifier](https://huggingface.co/ds4sd/DocumentFigureClassifier)
+
+### Supported Classes
+
+- Chart types (bar, line, pie, scatter)
+- Diagrams and flowcharts
+- Natural images
+- Logos and branding
+- Signatures
+- Technical illustrations
+
+### Usage
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:275
+
+```python
+from docling.models.stages.picture_classifier.document_picture_classifier import (
+    DocumentPictureClassifierOptions
+)
+
+# Use default picture classifier
+classifier_options = DocumentPictureClassifierOptions.from_preset(
+    "document_figure_classifier_v2"
+)
+```
+
+## VLM Convert (Full Page)
+
+### Overview
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:116
+
+Converts entire document pages to structured formats using vision-language models.
+
+**Model Family**: Vision-Language Models  
+**Output Formats**: DocTags (structured), Markdown (human-readable)  
+**Inference Engines**: Transformers, MLX, API (Ollama, LM Studio, OpenAI), vLLM, AUTO_INLINE
+
+### Available Models
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:220
+
+| Preset ID | Model | Size | Transformers | MLX | API | vLLM | Output |
+|-----------|-------|------|--------------|-----|-----|------|--------|
+| `granite_docling` ⭐ | Granite-Docling-258M | 258M | ✅ | ✅ | Ollama | ❌ | DocTags |
+| `smoldocling` | SmolDocling-256M | 256M | ✅ | ✅ | ❌ | ❌ | DocTags |
+| `deepseek_ocr` | DeepSeek-OCR-3B | 3B | ❌ | ❌ | Ollama, LM Studio | ❌ | Markdown |
+| `granite_vision` | Granite-Vision-3.3-2B | 2B | ✅ | ❌ | Ollama, LM Studio | ✅ | Markdown |
+| `pixtral` | Pixtral-12B | 12B | ✅ | ✅ | ❌ | ❌ | Markdown |
+| `got_ocr` | GOT-OCR-2.0 | - | ✅ | ❌ | ❌ | ❌ | Markdown |
+| `phi4` | Phi-4-Multimodal | - | ✅ | ❌ | ❌ | ✅ | Markdown |
+| `qwen` | Qwen2.5-VL-3B | 3B | ✅ | ✅ | ❌ | ❌ | Markdown |
+| `gemma_12b` | Gemma-3-12B | 12B | ❌ | ✅ | ❌ | ❌ | Markdown |
+| `gemma_27b` | Gemma-3-27B | 27B | ❌ | ✅ | ❌ | ❌ | Markdown |
+| `dolphin` | Dolphin | - | ✅ | ❌ | ❌ | ❌ | Markdown |
+
+### Usage
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:294
+
+```python
+from docling.datamodel.pipeline_options import VlmConvertOptions
+
+# Use SmolDocling with auto-selected engine
+options = VlmConvertOptions.from_preset("smoldocling")
+
+# Force specific engine
+from docling.datamodel.vlm_engine_options import MlxVlmEngineOptions
+
+options = VlmConvertOptions.from_preset(
+    "smoldocling",
+    engine_options=MlxVlmEngineOptions()
+)
+```
+
+### Output Formats
+
+**DocTags**: Structured XML-like format optimized for document understanding
+```xml
+<document>
+  <section_header>Introduction</section_header>
+  <text>This is a paragraph...</text>
+  <table>
+    <row><cell>Data</cell></row>
+  </table>
+</document>
+```
+
+**Markdown**: Human-readable format for general-purpose conversion
+```markdown
+# Introduction
+
+This is a paragraph...
+
+| Column 1 | Column 2 |
+|----------|----------|
+| Data     | Data     |
+```
+
+## Picture Description
+
+### Overview
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:143
+
+Generates natural language descriptions (captions) of images and figures.
+
+**Model Family**: Vision-Language Models  
+**Inference Engines**: Transformers, MLX, API (Ollama, LM Studio), vLLM, AUTO_INLINE
+
+### Available Models
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:236
+
+| Preset ID | Model | Size | Transformers | MLX | API | vLLM |
+|-----------|-------|------|--------------|-----|-----|------|
+| `smolvlm` ⭐ | SmolVLM-256M | 256M | ✅ | ✅ | LM Studio | ❌ |
+| `granite_vision` | Granite-Vision-3.3-2B | 2B | ✅ | ❌ | Ollama, LM Studio | ✅ |
+| `pixtral` | Pixtral-12B | 12B | ✅ | ✅ | ❌ | ❌ |
+| `qwen` | Qwen2.5-VL-3B | 3B | ✅ | ✅ | ❌ | ❌ |
+
+### Usage
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:310
+
+```python
+from docling.datamodel.pipeline_options import PictureDescriptionVlmOptions
+
+# Use Granite Vision for detailed descriptions
+options = PictureDescriptionVlmOptions.from_preset("granite_vision")
+```
+
+## Code & Formula Extraction
+
+### Overview
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:161
+
+Extracts and recognizes code blocks and mathematical formulas.
+
+**Model Family**: Vision-Language Models  
+**Inference Engines**: Transformers, MLX, AUTO_INLINE
+
+### Available Models
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:244
+
+| Preset ID | Model | Transformers | MLX |
+|-----------|-------|--------------|-----|
+| `codeformulav2` ⭐ | CodeFormulaV2 | ✅ | ❌ |
+| `granite_docling` | Granite-Docling-258M | ✅ | ✅ |
+
+**Model Card**: [ds4sd/CodeFormula](https://huggingface.co/ds4sd/CodeFormula)
+
+### Usage
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:318
+
+```python
+from docling.datamodel.pipeline_options import CodeFormulaVlmOptions
+
+# Use specialized CodeFormulaV2 model
+options = CodeFormulaVlmOptions.from_preset("codeformulav2")
+```
+
+## Inference Engine Compatibility
+
+### Object Detection Models
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:182
+
+| Stage | Engine | Devices |
+|-------|--------|----------|
+| Layout | docling-ibm-models | CPU, CUDA, MPS, XPU |
+| Table Structure | docling-ibm-models | CPU, CUDA, XPU |
+
+<Note>
+MPS is currently disabled for TableFormer due to performance issues.
+</Note>
+
+### Vision-Language Models
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:220
+
+VLM inference engines support varies by model:
+
+- **Transformers**: Direct HuggingFace transformers integration
+- **MLX**: Apple Silicon optimized (macOS only)
+- **API**: OpenAI-compatible endpoints (Ollama, LM Studio, vLLM)
+- **vLLM**: Linux-only high-performance server
+- **AUTO_INLINE**: Automatic engine selection
+
+## Model Selection Guide
+
+<AccordionGroup>
+  <Accordion title="Layout Detection">
+    **Recommended**: `docling-layout-heron`
+    
+    - Good balance of speed and accuracy
+    - Suitable for most document types
+    - Use Egret models for specialized needs
+  </Accordion>
+
+  <Accordion title="OCR Engine">
+    **Recommended**: `Auto` or `Tesseract`
+    
+    - **Auto**: Automatic engine selection
+    - **Tesseract**: Reliable, widely supported
+    - **RapidOCR (torch)**: GPU acceleration needed
+    - **macOS Vision**: Best quality on macOS
+  </Accordion>
+
+  <Accordion title="Table Structure">
+    **Recommended**: `Accurate` mode
+    
+    - Use **Accurate** for production (better quality)
+    - Use **Fast** for quick prototyping
+    - Enable `do_cell_matching` for best results
+  </Accordion>
+
+  <Accordion title="VLM Convert">
+    **Recommended**: `granite_docling` or `smoldocling`
+    
+    - **Granite Docling**: Best for structured output (DocTags)
+    - **SmolDocling**: Lightweight alternative
+    - **DeepSeek OCR**: High-quality Markdown (API-only)
+    - Larger models (Pixtral, Qwen) for complex documents
+  </Accordion>
+
+  <Accordion title="Picture Description">
+    **Recommended**: `smolvlm`
+    
+    - **SmolVLM**: Fast, good quality, small size
+    - **Granite Vision**: More detailed descriptions
+    - Larger models for specialized captioning
+  </Accordion>
+</AccordionGroup>
+
+## Performance Characteristics
+
+### Model Sizes and Speed
+
+| Model Type | Size Range | Typical Speed | GPU Benefit |
+|------------|------------|---------------|-------------|
+| Layout Detection | ~100-500MB | Fast | High |
+| OCR Engines | Varies | Fast-Medium | Varies |
+| Table Structure | ~100MB | Medium | High |
+| Picture Classifier | ~100MB | Fast | Medium |
+| Small VLMs (256M) | ~500MB-1GB | Fast | High |
+| Medium VLMs (2-3B) | 2-6GB | Medium | Very High |
+| Large VLMs (12B+) | 12GB+ | Slow | Critical |
+
+### Device Recommendations
+
+<CardGroup cols={2}>
+  <Card title="CPU Only" icon="microchip">
+    - Layout: Heron
+    - OCR: Tesseract/Auto
+    - VLM: SmolVLM/SmolDocling (small models only)
+    - Expect slower processing
+  </Card>
+  
+  <Card title="NVIDIA GPU" icon="bolt">
+    - All models supported
+    - Use batch processing
+    - Consider Flash Attention 2
+    - Ideal for VLM pipelines with inference servers
+  </Card>
+  
+  <Card title="Apple Silicon" icon="apple">
+    - Layout: All models via MPS
+    - VLM: MLX-optimized models (Granite, SmolDocling)
+    - Good performance for small-medium models
+    - Use MLX engine when available
+  </Card>
+  
+  <Card title="Intel GPU" icon="server">
+    - Layout: All models via XPU
+    - Table Structure: Supported
+    - Limited VLM support
+    - Check compatibility for specific models
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:328
+
+<CardGroup cols={2}>
+  <Card title="Vision Models Guide" icon="eye" href="/api/pipelines/vlm">
+    VLM-specific documentation
+  </Card>
+  <Card title="GPU Acceleration" icon="rocket" href="/advanced/gpu-acceleration">
+    GPU acceleration setup
+  </Card>
+  <Card title="Pipeline Options" icon="sliders" href="/api/options/pipeline-options">
+    Advanced configuration
+  </Card>
+  <Card title="Supported Formats" icon="file" href="/guides/basic-conversion">
+    Input format support
+  </Card>
+</CardGroup>
+
+## Notes
+
+**Source**: ~/workspace/source/docs/usage/model_catalog.md:335
+
+- **DocTags Format**: Structured XML-like format optimized for document understanding
+- **Markdown Format**: Human-readable format for general-purpose conversion
+- **Model Updates**: New models are added regularly - check the codebase for latest additions
+- **Engine Compatibility**: Not all engines work on all platforms - AUTO_INLINE handles this automatically
+- **Performance**: Actual performance varies by hardware, document complexity, and model size
+
+<Tip>
+Use `AUTO_INLINE` engine for VLMs to automatically select the best available inference engine for your platform.
+</Tip>

@@ -1,0 +1,320 @@
+---
+title: RAG with Haystack
+description: Build RAG pipelines with Haystack and Docling integration
+---
+
+Build production-ready RAG pipelines using Haystack's Docling extension with document-native chunking and grounding.
+
+## Overview
+
+This example demonstrates:
+- Using `DoclingConverter` for document conversion
+- Document chunking with `HybridChunker`
+- Vector storage with Milvus
+- Building indexing and RAG pipelines
+- Document-level grounding with page numbers and bounding boxes
+
+## Installation
+
+```bash
+pip install docling-haystack haystack-ai docling \
+    "pymilvus[milvus-lite]" milvus-haystack sentence-transformers
+```
+
+## Configuration
+
+```python
+import os
+from pathlib import Path
+from tempfile import mkdtemp
+
+from docling_haystack.converter import ExportType
+
+HF_TOKEN = os.getenv("HF_TOKEN")
+PATHS = ["https://arxiv.org/pdf/2408.09869"]  # Docling Technical Report
+EMBED_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
+GENERATION_MODEL_ID = "mistralai/Mixtral-8x7B-Instruct-v0.1"
+EXPORT_TYPE = ExportType.DOC_CHUNKS  # or ExportType.MARKDOWN
+QUESTION = "Which are the main AI models in Docling?"
+TOP_K = 3
+MILVUS_URI = str(Path(mkdtemp()) / "docling.db")
+```
+
+## Indexing Pipeline
+
+<Steps>
+  <Step title="Create Document Store">
+    Initialize Milvus document store for vector storage.
+  </Step>
+  
+  <Step title="Build Pipeline">
+    Assemble converter, embedder, and writer components.
+  </Step>
+  
+  <Step title="Connect Components">
+    Wire up the pipeline based on export type.
+  </Step>
+  
+  <Step title="Run Indexing">
+    Process documents and store in vector database.
+  </Step>
+</Steps>
+
+```python
+from docling_haystack.converter import DoclingConverter
+from haystack import Pipeline
+from haystack.components.embedders import SentenceTransformersDocumentEmbedder
+from haystack.components.preprocessors import DocumentSplitter
+from haystack.components.writers import DocumentWriter
+from milvus_haystack import MilvusDocumentStore
+
+from docling.chunking import HybridChunker
+
+# Create document store
+document_store = MilvusDocumentStore(
+    connection_args={"uri": MILVUS_URI},
+    drop_old=True,
+    text_field="txt",  # prevents conflict with metadata field
+)
+
+# Build indexing pipeline
+idx_pipe = Pipeline()
+idx_pipe.add_component(
+    "converter",
+    DoclingConverter(
+        export_type=EXPORT_TYPE,
+        chunker=HybridChunker(tokenizer=EMBED_MODEL_ID),
+    ),
+)
+idx_pipe.add_component(
+    "embedder",
+    SentenceTransformersDocumentEmbedder(model=EMBED_MODEL_ID),
+)
+idx_pipe.add_component(
+    "writer",
+    DocumentWriter(document_store=document_store)
+)
+
+# Connect components based on export type
+if EXPORT_TYPE == ExportType.DOC_CHUNKS:
+    idx_pipe.connect("converter", "embedder")
+elif EXPORT_TYPE == ExportType.MARKDOWN:
+    idx_pipe.add_component(
+        "splitter",
+        DocumentSplitter(split_by="sentence", split_length=1),
+    )
+    idx_pipe.connect("converter.documents", "splitter.documents")
+    idx_pipe.connect("splitter.documents", "embedder.documents")
+
+idx_pipe.connect("embedder", "writer")
+
+# Run indexing
+idx_pipe.run({"converter": {"paths": PATHS}})
+```
+
+## RAG Pipeline
+
+```python
+from haystack.components.builders import AnswerBuilder, PromptBuilder
+from haystack.components.embedders import SentenceTransformersTextEmbedder
+from haystack.components.generators import HuggingFaceAPIGenerator
+from haystack.utils import Secret
+from milvus_haystack import MilvusEmbeddingRetriever
+
+prompt_template = """
+    Given these documents, answer the question.
+    Documents:
+    {% for doc in documents %}
+        {{ doc.content }}
+    {% endfor %}
+    Question: {{query}}
+    Answer:
+    """
+
+rag_pipe = Pipeline()
+rag_pipe.add_component(
+    "embedder",
+    SentenceTransformersTextEmbedder(model=EMBED_MODEL_ID),
+)
+rag_pipe.add_component(
+    "retriever",
+    MilvusEmbeddingRetriever(document_store=document_store, top_k=TOP_K),
+)
+rag_pipe.add_component(
+    "prompt_builder",
+    PromptBuilder(template=prompt_template)
+)
+rag_pipe.add_component(
+    "llm",
+    HuggingFaceAPIGenerator(
+        api_type="serverless_inference_api",
+        api_params={"model": GENERATION_MODEL_ID},
+        token=Secret.from_token(HF_TOKEN) if HF_TOKEN else None,
+    ),
+)
+rag_pipe.add_component("answer_builder", AnswerBuilder())
+
+# Connect components
+rag_pipe.connect("embedder.embedding", "retriever")
+rag_pipe.connect("retriever", "prompt_builder.documents")
+rag_pipe.connect("prompt_builder", "llm")
+rag_pipe.connect("llm.replies", "answer_builder.replies")
+rag_pipe.connect("llm.meta", "answer_builder.meta")
+rag_pipe.connect("retriever", "answer_builder.documents")
+
+# Query
+rag_res = rag_pipe.run(
+    {
+        "embedder": {"text": QUESTION},
+        "prompt_builder": {"query": QUESTION},
+        "answer_builder": {"query": QUESTION},
+    }
+)
+```
+
+## Display Results
+
+```python
+from docling.chunking import DocChunk
+
+print(f"Question: {QUESTION}\n")
+print(f"Answer: {rag_res['answer_builder']['answers'][0].data.strip()}\n")
+print("Sources:")
+
+sources = rag_res["answer_builder"]["answers"][0].documents
+for source in sources:
+    if EXPORT_TYPE == ExportType.DOC_CHUNKS:
+        doc_chunk = DocChunk.model_validate(source.meta["dl_meta"])
+        print(f"- Text: {doc_chunk.text[:150]}...")
+        
+        if doc_chunk.meta.origin:
+            print(f"  File: {doc_chunk.meta.origin.filename}")
+        
+        if doc_chunk.meta.headings:
+            print(f"  Section: {' / '.join(doc_chunk.meta.headings)}")
+        
+        bbox = doc_chunk.meta.doc_items[0].prov[0].bbox
+        print(f"  Page: {doc_chunk.meta.doc_items[0].prov[0].page_no}")
+        print(f"  Bbox: [{int(bbox.l)}, {int(bbox.t)}, {int(bbox.r)}, {int(bbox.b)}]")
+    
+    elif EXPORT_TYPE == ExportType.MARKDOWN:
+        print(f"- {source.content[:200]}...")
+```
+
+## Document-Level Grounding
+
+When using `ExportType.DOC_CHUNKS`, each source includes:
+
+- **File name**: Original document filename
+- **Section headings**: Hierarchical section path
+- **Page number**: Exact page where content appears
+- **Bounding box**: Coordinates on the page (left, top, right, bottom)
+
+## Complete Example
+
+```python
+import os
+from pathlib import Path
+from tempfile import mkdtemp
+
+from docling.chunking import DocChunk, HybridChunker
+from docling_haystack.converter import DoclingConverter, ExportType
+from haystack import Pipeline
+from haystack.components.builders import AnswerBuilder, PromptBuilder
+from haystack.components.embedders import (
+    SentenceTransformersDocumentEmbedder,
+    SentenceTransformersTextEmbedder,
+)
+from haystack.components.generators import HuggingFaceAPIGenerator
+from haystack.components.writers import DocumentWriter
+from haystack.utils import Secret
+from milvus_haystack import MilvusDocumentStore, MilvusEmbeddingRetriever
+
+# Configuration
+HF_TOKEN = os.getenv("HF_TOKEN")
+PATHS = ["https://arxiv.org/pdf/2408.09869"]
+EMBED_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
+GENERATION_MODEL_ID = "mistralai/Mixtral-8x7B-Instruct-v0.1"
+QUESTION = "Which are the main AI models in Docling?"
+TOP_K = 3
+
+# Indexing
+document_store = MilvusDocumentStore(
+    connection_args={"uri": str(Path(mkdtemp()) / "docling.db")},
+    drop_old=True,
+    text_field="txt",
+)
+
+idx_pipe = Pipeline()
+idx_pipe.add_component(
+    "converter",
+    DoclingConverter(
+        export_type=ExportType.DOC_CHUNKS,
+        chunker=HybridChunker(tokenizer=EMBED_MODEL_ID),
+    ),
+)
+idx_pipe.add_component(
+    "embedder",
+    SentenceTransformersDocumentEmbedder(model=EMBED_MODEL_ID),
+)
+idx_pipe.add_component("writer", DocumentWriter(document_store=document_store))
+idx_pipe.connect("converter", "embedder")
+idx_pipe.connect("embedder", "writer")
+idx_pipe.run({"converter": {"paths": PATHS}})
+
+# RAG
+rag_pipe = Pipeline()
+rag_pipe.add_component(
+    "embedder", SentenceTransformersTextEmbedder(model=EMBED_MODEL_ID)
+)
+rag_pipe.add_component(
+    "retriever", MilvusEmbeddingRetriever(document_store=document_store, top_k=TOP_K)
+)
+rag_pipe.add_component(
+    "prompt_builder",
+    PromptBuilder(template="Context: {% for doc in documents %}{{doc.content}}{% endfor %}\nQuestion: {{query}}\nAnswer:")
+)
+rag_pipe.add_component(
+    "llm",
+    HuggingFaceAPIGenerator(
+        api_type="serverless_inference_api",
+        api_params={"model": GENERATION_MODEL_ID},
+        token=Secret.from_token(HF_TOKEN) if HF_TOKEN else None,
+    ),
+)
+rag_pipe.add_component("answer_builder", AnswerBuilder())
+rag_pipe.connect("embedder.embedding", "retriever")
+rag_pipe.connect("retriever", "prompt_builder.documents")
+rag_pipe.connect("prompt_builder", "llm")
+rag_pipe.connect("llm.replies", "answer_builder.replies")
+rag_pipe.connect("llm.meta", "answer_builder.meta")
+rag_pipe.connect("retriever", "answer_builder.documents")
+
+result = rag_pipe.run(
+    {
+        "embedder": {"text": QUESTION},
+        "prompt_builder": {"query": QUESTION},
+        "answer_builder": {"query": QUESTION},
+    }
+)
+
+print(f"Q: {QUESTION}")
+print(f"A: {result['answer_builder']['answers'][0].data.strip()}")
+```
+
+## Export Types
+
+- **`ExportType.DOC_CHUNKS`** (recommended): Document-native chunking with rich metadata
+- **`ExportType.MARKDOWN`**: Markdown export with standard text splitting
+
+## Tech Stack
+
+| Component | Technology | Execution |
+|-----------|------------|------------|
+| Embedding | Hugging Face / Sentence Transformers | Local |
+| Vector store | Milvus | Local |
+| Gen AI | Hugging Face Inference API | Remote |
+
+<Note>
+  For best conversion speed, use GPU acceleration when available.
+</Note>

@@ -1,0 +1,400 @@
+---
+title: AcceleratorOptions
+description: Hardware acceleration configuration for model inference
+---
+
+## Overview
+
+`AcceleratorOptions` configures hardware acceleration for Docling's AI models, including layout detection, OCR, table structure extraction, and vision-language models. Proper configuration can significantly improve processing speed by leveraging GPUs and optimizing CPU usage.
+
+## AcceleratorOptions
+
+Hardware acceleration configuration for model inference. Can be configured via environment variables with `DOCLING_` prefix.
+
+```python
+from docling.datamodel.accelerator_options import AcceleratorOptions, AcceleratorDevice
+
+options = AcceleratorOptions(
+    num_threads=8,
+    device="cuda",
+    cuda_use_flash_attention2=True
+)
+```
+
+### Parameters
+
+<ParamField path="num_threads" type="int" default="4">
+  Number of CPU threads to use for model inference. Higher values can improve throughput on multi-core systems but may increase memory usage.
+  
+  Can be set via `DOCLING_NUM_THREADS` or `OMP_NUM_THREADS` environment variables.
+  
+  **Recommended:** Number of physical CPU cores.
+</ParamField>
+
+<ParamField path="device" type="str | AcceleratorDevice" default="'auto'">
+  Hardware device for model inference.
+  
+  **Options:**
+  - `auto` - Automatic detection (selects best available device)
+  - `cpu` - CPU only
+  - `cuda` - NVIDIA GPU
+  - `cuda:N` - Specific NVIDIA GPU (e.g., `cuda:0`, `cuda:1`)
+  - `mps` - Apple Silicon GPU
+  - `xpu` - Intel GPU
+  
+  Auto mode selects the best available device. Can be set via `DOCLING_DEVICE` environment variable.
+</ParamField>
+
+<ParamField path="cuda_use_flash_attention2" type="bool" default="False">
+  Enable Flash Attention 2 optimization for CUDA devices.
+  
+  Provides significant speedup and memory reduction for transformer models on compatible NVIDIA GPUs (Ampere or newer). Requires `flash-attn` package installation.
+  
+  Can be set via `DOCLING_CUDA_USE_FLASH_ATTENTION2` environment variable.
+</ParamField>
+
+## AcceleratorDevice
+
+Enum defining available hardware devices for model inference.
+
+```python
+from docling.datamodel.accelerator_options import AcceleratorDevice
+
+# Use CUDA GPU
+device = AcceleratorDevice.CUDA
+
+# Auto-detect best device
+device = AcceleratorDevice.AUTO
+```
+
+### Values
+
+<ResponseField name="AUTO" type="str" value="'auto'">
+  Automatically detect and use the best available device (GPU if available, otherwise CPU).
+</ResponseField>
+
+<ResponseField name="CPU" type="str" value="'cpu'">
+  Force CPU-only processing. Use when GPU is unavailable or for debugging.
+</ResponseField>
+
+<ResponseField name="CUDA" type="str" value="'cuda'">
+  Use NVIDIA CUDA GPU for acceleration. Requires CUDA-compatible GPU and drivers.
+</ResponseField>
+
+<ResponseField name="MPS" type="str" value="'mps'">
+  Use Apple Metal Performance Shaders for GPU acceleration on Apple Silicon (M1/M2/M3).
+</ResponseField>
+
+<ResponseField name="XPU" type="str" value="'xpu'">
+  Use Intel XPU for GPU acceleration on Intel GPUs.
+</ResponseField>
+
+## Usage
+
+### Basic Configuration
+
+```python
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.accelerator_options import AcceleratorOptions
+
+# Configure hardware acceleration
+accel_options = AcceleratorOptions(
+    num_threads=8,
+    device="cuda:0"  # Use first GPU
+)
+
+pipeline_options = PdfPipelineOptions(
+    accelerator_options=accel_options,
+    do_ocr=True,
+    do_table_structure=True
+)
+
+converter = DocumentConverter(
+    format_options={
+        PdfFormatOption: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+```
+
+### Auto-Detection
+
+```python
+# Let Docling automatically select the best device
+accel_options = AcceleratorOptions(
+    device="auto",
+    num_threads=16
+)
+```
+
+### Multi-GPU Setup
+
+```python
+# Use specific GPU in multi-GPU system
+accel_options = AcceleratorOptions(
+    device="cuda:1",  # Use second GPU
+    cuda_use_flash_attention2=True
+)
+```
+
+### Apple Silicon Optimization
+
+```python
+# Optimize for Apple M1/M2/M3
+accel_options = AcceleratorOptions(
+    device="mps",
+    num_threads=8  # Use efficiency cores
+)
+```
+
+### CPU-Only Mode
+
+```python
+# Force CPU processing (e.g., for debugging)
+accel_options = AcceleratorOptions(
+    device="cpu",
+    num_threads=16  # Use more threads on CPU
+)
+```
+
+## Environment Variables
+
+AcceleratorOptions can be configured via environment variables:
+
+```bash
+# Set device
+export DOCLING_DEVICE=cuda:0
+
+# Set number of threads
+export DOCLING_NUM_THREADS=8
+# Or use OpenMP standard
+export OMP_NUM_THREADS=8
+
+# Enable Flash Attention 2
+export DOCLING_CUDA_USE_FLASH_ATTENTION2=true
+```
+
+Then use defaults in code:
+
+```python
+from docling.datamodel.accelerator_options import AcceleratorOptions
+
+# Reads from environment variables
+options = AcceleratorOptions()
+```
+
+## Performance Recommendations
+
+<AccordionGroup>
+  <Accordion title="NVIDIA GPU (CUDA)">
+    **Best Configuration:**
+    ```python
+    AcceleratorOptions(
+        device="cuda",
+        cuda_use_flash_attention2=True,  # If supported
+        num_threads=4  # Lower since GPU handles heavy work
+    )
+    ```
+    
+    **Requirements:**
+    - CUDA 11.8+ and compatible drivers
+    - For Flash Attention 2: Ampere GPU or newer (RTX 30xx, A100, etc.)
+    - Install: `pip install flash-attn` (optional, for Flash Attention 2)
+    
+    **Expected Speedup:** 5-10x over CPU for large documents
+  </Accordion>
+  
+  <Accordion title="Apple Silicon (M1/M2/M3)">
+    **Best Configuration:**
+    ```python
+    AcceleratorOptions(
+        device="mps",
+        num_threads=8
+    )
+    ```
+    
+    **Requirements:**
+    - macOS 12.3+ (Monterey or later)
+    - PyTorch with MPS support
+    
+    **Expected Speedup:** 2-4x over CPU
+  </Accordion>
+  
+  <Accordion title="CPU Only">
+    **Best Configuration:**
+    ```python
+    AcceleratorOptions(
+        device="cpu",
+        num_threads=16  # Match your CPU core count
+    )
+    ```
+    
+    **Optimization Tips:**
+    - Set `num_threads` to number of physical cores (not hyperthreads)
+    - For Intel CPUs: Consider OpenVINO backend for some models
+    - Process multiple documents in parallel at application level
+  </Accordion>
+  
+  <Accordion title="Intel GPU (XPU)">
+    **Best Configuration:**
+    ```python
+    AcceleratorOptions(
+        device="xpu",
+        num_threads=4
+    )
+    ```
+    
+    **Requirements:**
+    - Intel GPU with oneAPI support
+    - Intel Extension for PyTorch
+  </Accordion>
+</AccordionGroup>
+
+## Flash Attention 2
+
+Flash Attention 2 is an optimized attention mechanism that provides:
+
+- **Faster inference:** 2-4x speedup for transformer models
+- **Lower memory:** 50% reduction in GPU memory usage
+- **Same accuracy:** Numerically identical results
+
+### Requirements
+
+- NVIDIA GPU with compute capability 8.0+ (Ampere or newer)
+- CUDA 11.8+
+- Flash Attention package: `pip install flash-attn`
+
+### Enabling Flash Attention 2
+
+```python
+accel_options = AcceleratorOptions(
+    device="cuda",
+    cuda_use_flash_attention2=True
+)
+```
+
+Or via environment variable:
+
+```bash
+export DOCLING_CUDA_USE_FLASH_ATTENTION2=true
+```
+
+<Note>
+  Flash Attention 2 is only available on compatible NVIDIA GPUs. If enabled on unsupported hardware, Docling will fall back to standard attention automatically.
+</Note>
+
+## Thread Configuration
+
+The `num_threads` parameter controls CPU parallelism for:
+
+- Model inference (when using CPU device)
+- Pre/post-processing operations
+- Parallel page processing
+
+### Guidelines
+
+<Steps>
+  <Step title="Identify CPU cores">
+    Find your physical core count (not hyperthreads):
+    
+    ```bash
+    # Linux
+    lscpu | grep "Core(s) per socket"
+    
+    # macOS
+    sysctl hw.physicalcpu
+    
+    # Python
+    import os
+    os.cpu_count() // 2  # Rough estimate
+    ```
+  </Step>
+  
+  <Step title="Set num_threads">
+    **Recommended values:**
+    - GPU processing: 4-8 threads (CPU handles preprocessing only)
+    - CPU processing: Match physical core count
+    - Shared server: Leave some cores for other processes
+  </Step>
+  
+  <Step title="Benchmark and adjust">
+    Test different values and measure throughput:
+    
+    ```python
+    import time
+    
+    for num_threads in [4, 8, 16]:
+        options = AcceleratorOptions(num_threads=num_threads)
+        start = time.time()
+        # Process document
+        print(f"{num_threads} threads: {time.time() - start:.2f}s")
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="CUDA out of memory">
+    **Solutions:**
+    1. Reduce batch sizes in pipeline options
+    2. Process fewer pages concurrently
+    3. Enable Flash Attention 2 (reduces memory usage)
+    4. Use a GPU with more VRAM
+    
+    ```python
+    pipeline_options = PdfPipelineOptions(
+        layout_batch_size=2,  # Reduce from default 4
+        ocr_batch_size=2,
+        table_structure_batch_size=2
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="MPS errors on macOS">
+    **Common issues:**
+    - Ensure macOS 12.3+ (Monterey or later)
+    - Update PyTorch to latest version with MPS support
+    - Some models may not support MPS - fall back to CPU
+    
+    ```python
+    # Disable MPS warnings for EasyOCR
+    from docling.datamodel.pipeline_options import EasyOcrOptions
+    
+    ocr = EasyOcrOptions(
+        suppress_mps_warnings=True
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Slow CPU performance">
+    **Optimization checklist:**
+    - [ ] Set `num_threads` to physical core count
+    - [ ] Use `OMP_NUM_THREADS` environment variable
+    - [ ] Disable unnecessary pipeline features
+    - [ ] Consider GPU acceleration
+    - [ ] Process documents in parallel (application-level)
+  </Accordion>
+  
+  <Accordion title="Device not found">
+    Verify device availability:
+    
+    ```python
+    import torch
+    
+    # Check CUDA
+    print(f"CUDA available: {torch.cuda.is_available()}")
+    if torch.cuda.is_available():
+        print(f"CUDA device: {torch.cuda.get_device_name(0)}")
+    
+    # Check MPS (macOS)
+    print(f"MPS available: {torch.backends.mps.is_available()}")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## See Also
+
+- [Pipeline Options](/api/options/pipeline-options) - Pipeline configuration
+- [GPU Acceleration](/advanced/gpu-acceleration) - GPU optimization guide
+- [Installation](/installation) - Installation and requirements

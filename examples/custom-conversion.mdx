@@ -1,0 +1,146 @@
+---
+title: Custom Conversion
+description: Customize PDF conversion with OCR engines, backends, and pipeline options
+---
+
+Docling provides extensive customization options for PDF conversion, allowing you to toggle OCR engines, backends, and pipeline settings.
+
+## Overview
+
+This example demonstrates:
+- How to configure OCR options (EasyOCR, Tesseract, macOS OCR)
+- Switching between PDF backends
+- Customizing table structure recognition
+- Setting accelerator options for GPU/CPU
+
+## Basic Configuration
+
+```python custom_convert.py
+from pathlib import Path
+from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TableStructureOptions,
+)
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+input_doc_path = Path("path/to/document.pdf")
+
+# Configure pipeline options
+pipeline_options = PdfPipelineOptions()
+pipeline_options.do_ocr = True
+pipeline_options.do_table_structure = True
+pipeline_options.table_structure_options = TableStructureOptions(
+    do_cell_matching=True
+)
+pipeline_options.ocr_options.lang = ["es"]  # Set language
+pipeline_options.accelerator_options = AcceleratorOptions(
+    num_threads=4, device=AcceleratorDevice.AUTO
+)
+
+doc_converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+result = doc_converter.convert(input_doc_path)
+```
+
+## OCR Engine Options
+
+<CodeGroup>
+
+```python EasyOCR (Default)
+pipeline_options = PdfPipelineOptions()
+pipeline_options.do_ocr = True
+pipeline_options.ocr_options.lang = ["en", "de"]
+pipeline_options.do_table_structure = True
+pipeline_options.table_structure_options = TableStructureOptions(
+    do_cell_matching=True
+)
+```
+
+```python Tesseract
+from docling.datamodel.pipeline_options import TesseractOcrOptions
+
+pipeline_options = PdfPipelineOptions()
+pipeline_options.do_ocr = True
+pipeline_options.ocr_options = TesseractOcrOptions()
+pipeline_options.do_table_structure = True
+```
+
+```python macOS OCR
+from docling.datamodel.pipeline_options import OcrMacOptions
+
+pipeline_options = PdfPipelineOptions()
+pipeline_options.do_ocr = True
+pipeline_options.ocr_options = OcrMacOptions()
+pipeline_options.do_table_structure = True
+```
+
+```python No OCR
+pipeline_options = PdfPipelineOptions()
+pipeline_options.do_ocr = False
+pipeline_options.do_table_structure = True
+pipeline_options.table_structure_options = TableStructureOptions(
+    do_cell_matching=False
+)
+```
+
+</CodeGroup>
+
+## Export Results
+
+<Steps>
+  <Step title="Convert Document">
+    Process the document with your custom configuration.
+  </Step>
+  
+  <Step title="Export to Multiple Formats">
+    Save results as JSON, Markdown, plain text, and doctags.
+  </Step>
+</Steps>
+
+```python
+from pathlib import Path
+import json
+
+output_dir = Path("scratch")
+output_dir.mkdir(parents=True, exist_ok=True)
+doc_filename = result.input.file.stem
+
+# Export to JSON
+with (output_dir / f"{doc_filename}.json").open("w") as fp:
+    fp.write(json.dumps(result.document.export_to_dict()))
+
+# Export to Markdown
+with (output_dir / f"{doc_filename}.md").open("w") as fp:
+    fp.write(result.document.export_to_markdown())
+
+# Export to plain text
+with (output_dir / f"{doc_filename}.txt").open("w") as fp:
+    fp.write(result.document.export_to_markdown(strict_text=True))
+
+# Export to doctags
+with (output_dir / f"{doc_filename}.doctags").open("w") as fp:
+    fp.write(result.document.export_to_doctags())
+```
+
+<Note>
+  Adjust `pipeline_options.ocr_options.lang` to match your document's language. Examples: `["en"]`, `["es"]`, `["en", "de"]`.
+</Note>
+
+## Accelerator Configuration
+
+Tune performance with accelerator options:
+
+```python
+from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+
+pipeline_options.accelerator_options = AcceleratorOptions(
+    num_threads=4,
+    device=AcceleratorDevice.AUTO  # or CPU, CUDA, MPS
+)
+```

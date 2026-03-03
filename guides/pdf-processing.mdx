@@ -1,0 +1,535 @@
+---
+title: PDF Processing Options
+description: Advanced PDF conversion with table extraction, OCR, layout models, and code/formula enrichment
+---
+
+## Overview
+
+PDFs are the most complex document format Docling handles. This guide covers PDF-specific features:
+
+- **Table structure extraction**: Detect and reconstruct complex tables
+- **OCR integration**: Extract text from scanned pages
+- **Layout analysis**: Understand document structure with deep learning models
+- **Code and formula enrichment**: Specialized extraction for technical content
+- **PDF backends**: Choose between different parsing engines
+
+## Table Structure Extraction
+
+Docling uses the TableFormer model to detect tables and reconstruct their structure:
+
+```python
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TableStructureOptions,
+    TableFormerMode,
+)
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions(
+    do_table_structure=True,  # Enable table extraction
+)
+
+# Configure table extraction mode
+pipeline_options.table_structure_options = TableStructureOptions(
+    do_cell_matching=True,      # Match cells to PDF content
+    mode=TableFormerMode.ACCURATE,  # Use accurate mode (slower but better)
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+result = converter.convert("document_with_tables.pdf")
+```
+
+### Table Extraction Modes
+
+<Tabs>
+  <Tab title="Accurate (Recommended)">
+    ```python
+    from docling.datamodel.pipeline_options import TableFormerMode
+
+    pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE
+    ```
+    
+    **Use when:**
+    - Tables have complex layouts (merged cells, nested headers)
+    - Accuracy is more important than speed
+    - Processing production documents
+
+    **Trade-offs:**
+    - Slower processing (~2-3x vs. FAST mode)
+    - Higher quality results
+  </Tab>
+  <Tab title="Fast">
+    ```python
+    from docling.datamodel.pipeline_options import TableFormerMode
+
+    pipeline_options.table_structure_options.mode = TableFormerMode.FAST
+    ```
+
+    **Use when:**
+    - Tables have simple, regular structures
+    - Processing large batches where speed matters
+    - Previewing or prototyping
+
+    **Trade-offs:**
+    - Faster processing
+    - May miss complex table structures
+  </Tab>
+</Tabs>
+
+### Cell Matching
+
+Control how table cells are matched to PDF content:
+
+```python
+from docling.datamodel.pipeline_options import TableStructureOptions
+
+# Match cells to PDF text (default, recommended)
+pipeline_options.table_structure_options = TableStructureOptions(
+    do_cell_matching=True  # Use text from PDF
+)
+
+# Use predicted cell content from model
+pipeline_options.table_structure_options = TableStructureOptions(
+    do_cell_matching=False  # Use model predictions
+)
+```
+
+<Note>
+If extracted tables have columns erroneously merged, try setting `do_cell_matching=False` to use the model's predicted cell boundaries instead of matching to PDF cells.
+</Note>
+
+## Layout Analysis
+
+Docling uses deep learning models to understand document structure:
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    LayoutOptions,
+)
+from docling.datamodel.layout_model_specs import (
+    DOCLING_LAYOUT_HERON,      # Default, balanced
+    DOCLING_LAYOUT_EGRET_LARGE,    # Higher accuracy
+    DOCLING_LAYOUT_EGRET_XLARGE,   # Highest accuracy
+)
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions()
+
+pipeline_options.layout_options = LayoutOptions(
+    model_spec=DOCLING_LAYOUT_HERON,  # Choose layout model
+    create_orphan_clusters=True,      # Group isolated elements
+    keep_empty_clusters=False,        # Remove empty regions
+    skip_cell_assignment=False,       # Assign cells to tables
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+```
+
+### Available Layout Models
+
+| Model | Accuracy | Speed | Memory | Use Case |
+|-------|----------|-------|--------|----------|
+| `DOCLING_LAYOUT_HERON` | Good | Fast | Low | Default, general purpose |
+| `DOCLING_LAYOUT_EGRET_LARGE` | Better | Slower | Medium | Complex layouts |
+| `DOCLING_LAYOUT_EGRET_XLARGE` | Best | Slowest | High | Maximum accuracy needed |
+
+## PDF Backend Selection
+
+Choose between different PDF parsing backends:
+
+<Tabs>
+  <Tab title="Docling Parse (Default)">
+    ```python
+    from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
+    from docling.datamodel.base_models import InputFormat
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(
+                backend=DoclingParseDocumentBackend
+            )
+        }
+    )
+    ```
+
+    **Features:**
+    - Advanced layout analysis
+    - Best table detection
+    - Complex document handling
+    - **Recommended for most use cases**
+  </Tab>
+  <Tab title="PyPDFium2">
+    ```python
+    from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+    from docling.datamodel.base_models import InputFormat
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(
+                backend=PyPdfiumDocumentBackend
+            )
+        }
+    )
+    ```
+
+    **Features:**
+    - Fast text extraction
+    - Lower memory usage
+    - Good for simple PDFs with embedded text
+    - Use when speed is critical
+  </Tab>
+</Tabs>
+
+## Force Backend Text
+
+Bypass layout model predictions and use native PDF text:
+
+```python
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions(
+    force_backend_text=True  # Use PDF's embedded text directly
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+```
+
+<Note>
+`force_backend_text=True` is useful for PDFs with reliable programmatic text layers. It's faster but bypasses layout model benefits like reading order correction.
+</Note>
+
+## Code Enrichment
+
+Extract and enhance code blocks with language detection:
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    CodeFormulaVlmOptions,
+)
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions(
+    do_code_enrichment=True,  # Enable code extraction
+)
+
+# Use default code/formula model
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+# Or use a specific preset
+pipeline_options.code_formula_options = CodeFormulaVlmOptions.from_preset(
+    "codeformulav2"
+)
+```
+
+### Using Code Extraction Results
+
+```python
+from docling_core.types.doc import CodeItem
+
+result = converter.convert("technical_paper.pdf")
+
+for item, level in result.document.iterate_items():
+    if isinstance(item, CodeItem):
+        print(f"Language: {item.code_language}")
+        print(f"Code: {item.text}")
+        print("---")
+```
+
+## Formula Enrichment
+
+Extract mathematical formulas and convert to LaTeX:
+
+```python
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    CodeFormulaVlmOptions,
+)
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions(
+    do_formula_enrichment=True,  # Enable formula extraction
+)
+
+# Configure formula extraction model
+pipeline_options.code_formula_options = CodeFormulaVlmOptions.from_preset(
+    "codeformulav2"
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+result = converter.convert("math_paper.pdf")
+
+# Formulas are automatically rendered in HTML export
+html = result.document.export_to_html()
+# HTML includes MathML rendering of formulas
+```
+
+## Page Image Generation
+
+Render PDF pages as images:
+
+```python
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions(
+    generate_page_images=True,  # Render pages as PNG
+    images_scale=2.0,           # Scale factor (2.0 = 144 DPI)
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+result = converter.convert("document.pdf")
+
+# Access page images
+for page in result.document.pages:
+    if page.image:
+        page.image.save(f"page_{page.page_no}.png")
+```
+
+## Picture Extraction
+
+Extract embedded images from PDFs:
+
+```python
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling_core.types.doc import PictureItem
+
+pipeline_options = PdfPipelineOptions(
+    generate_picture_images=True,  # Extract embedded images
+    images_scale=2.0,              # Image resolution scale
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+
+result = converter.convert("document.pdf")
+
+# Save extracted pictures
+for item, level in result.document.iterate_items():
+    if isinstance(item, PictureItem) and item.image:
+        item.image.save(f"picture_{item.self_ref}.png")
+```
+
+## Encrypted PDFs
+
+Handle password-protected PDFs:
+
+```python
+from pydantic import SecretStr
+from docling.datamodel.backend_options import PdfBackendOptions
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+backend_options = PdfBackendOptions(
+    password=SecretStr("your-password-here")
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(backend_options=backend_options)
+    }
+)
+
+result = converter.convert("encrypted.pdf")
+```
+
+## Batch Size Configuration
+
+Optimize batch processing for PDFs:
+
+```python
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+pipeline_options = PdfPipelineOptions(
+    # Batch sizes for different stages
+    ocr_batch_size=4,           # Pages per OCR batch
+    layout_batch_size=8,        # Pages per layout batch
+    table_batch_size=4,         # Pages per table extraction batch
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+    }
+)
+```
+
+## Complete Configuration Example
+
+Putting it all together:
+
+```python
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TableStructureOptions,
+    TableFormerMode,
+    LayoutOptions,
+    EasyOcrOptions,
+)
+from docling.datamodel.layout_model_specs import DOCLING_LAYOUT_HERON
+from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+# Configure all PDF processing options
+pipeline_options = PdfPipelineOptions(
+    # Core features
+    do_ocr=True,
+    do_table_structure=True,
+    do_code_enrichment=True,
+    do_formula_enrichment=True,
+    
+    # Image generation
+    generate_page_images=True,
+    generate_picture_images=True,
+    images_scale=2.0,
+    
+    # Performance
+    document_timeout=120.0,
+    ocr_batch_size=4,
+    layout_batch_size=8,
+)
+
+# Configure table extraction
+pipeline_options.table_structure_options = TableStructureOptions(
+    do_cell_matching=True,
+    mode=TableFormerMode.ACCURATE,
+)
+
+# Configure layout analysis
+pipeline_options.layout_options = LayoutOptions(
+    model_spec=DOCLING_LAYOUT_HERON,
+    create_orphan_clusters=True,
+)
+
+# Configure OCR
+pipeline_options.ocr_options = EasyOcrOptions(
+    lang=["en", "fr", "de"],
+    confidence_threshold=0.5,
+)
+
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(
+            backend=DoclingParseDocumentBackend,
+            pipeline_options=pipeline_options,
+        )
+    }
+)
+
+result = converter.convert("complex_document.pdf")
+```
+
+## Performance Tips
+
+<Steps>
+
+<Step title="Disable unnecessary features">
+Only enable what you need:
+
+```python
+pipeline_options = PdfPipelineOptions(
+    do_ocr=False,              # Disable for PDFs with text layer
+    do_table_structure=True,   # Only if extracting tables
+    do_code_enrichment=False,  # Only for technical docs
+    do_formula_enrichment=False,  # Only for scientific docs
+)
+```
+</Step>
+
+<Step title="Use appropriate table mode">
+Balance speed vs. accuracy:
+
+```python
+# Fast mode for simple tables
+pipeline_options.table_structure_options.mode = TableFormerMode.FAST
+
+# Accurate mode for complex tables
+pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE
+```
+</Step>
+
+<Step title="Optimize batch sizes">
+Adjust based on your hardware:
+
+```python
+# For GPU systems
+pipeline_options.ocr_batch_size = 8
+pipeline_options.layout_batch_size = 16
+
+# For CPU systems
+pipeline_options.ocr_batch_size = 2
+pipeline_options.layout_batch_size = 4
+```
+</Step>
+
+<Step title="Set timeouts">
+Prevent runaway conversions:
+
+```python
+pipeline_options.document_timeout = 120.0  # 2 minutes max
+```
+</Step>
+
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="OCR Configuration" icon="text" href="/guides/ocr-configuration">
+    Configure OCR engines for scanned PDFs
+  </Card>
+  <Card title="VLM Models" icon="brain" href="/guides/vlm-models">
+    Use vision-language models for PDF understanding
+  </Card>
+  <Card title="Batch Processing" icon="layer-group" href="/guides/batch-processing">
+    Optimize PDF batch processing workflows
+  </Card>
+  <Card title="Export Formats" icon="file-export" href="/guides/export-formats">
+    Export PDFs to Markdown, HTML, JSON, and more
+  </Card>
+</CardGroup>
