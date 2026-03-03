@@ -1,0 +1,208 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Docling",
+  "projectDescription": "AI-powered document parsing library that converts PDFs, DOCX, PPTX, and more into unified structured formats for GenAI applications",
+  "theme": "palm",
+  "primaryColor": "#0094ff",
+  "lightColor": "#6ec1ff",
+  "darkColor": "#003778",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/docling-document",
+              "concepts/pipelines",
+              "concepts/backends",
+              "concepts/serialization",
+              "concepts/chunking"
+            ]
+          },
+          {
+            "group": "Usage Guides",
+            "pages": [
+              "guides/basic-conversion",
+              "guides/advanced-options",
+              "guides/batch-processing",
+              "guides/pdf-processing",
+              "guides/ocr-configuration",
+              "guides/vlm-models",
+              "guides/audio-video",
+              "guides/export-formats"
+            ]
+          },
+          {
+            "group": "Advanced Features",
+            "pages": [
+              "advanced/information-extraction",
+              "advanced/enrichments",
+              "advanced/plugins",
+              "advanced/confidence-scores",
+              "advanced/gpu-acceleration",
+              "advanced/model-catalog"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/overview",
+              "integrations/langchain",
+              "integrations/llamaindex",
+              "integrations/haystack",
+              "integrations/crewai",
+              "integrations/mcp-server",
+              "integrations/more"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core API",
+            "pages": [
+              "api/document-converter",
+              "api/conversion-result",
+              "api/docling-document"
+            ]
+          },
+          {
+            "group": "Pipelines",
+            "pages": [
+              "api/pipelines/standard-pdf",
+              "api/pipelines/simple",
+              "api/pipelines/vlm",
+              "api/pipelines/asr"
+            ]
+          },
+          {
+            "group": "Options & Configuration",
+            "pages": [
+              "api/options/pipeline-options",
+              "api/options/pdf-backend-options",
+              "api/options/ocr-options",
+              "api/options/table-structure-options",
+              "api/options/accelerator-options"
+            ]
+          },
+          {
+            "group": "Backends",
+            "pages": [
+              "api/backends/overview",
+              "api/backends/pdf",
+              "api/backends/docx",
+              "api/backends/pptx",
+              "api/backends/xlsx",
+              "api/backends/html",
+              "api/backends/image",
+              "api/backends/audio"
+            ]
+          },
+          {
+            "group": "CLI",
+            "pages": [
+              "api/cli/commands",
+              "api/cli/options"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Examples",
+        "groups": [
+          {
+            "group": "Conversion",
+            "pages": [
+              "examples/simple-conversion",
+              "examples/custom-conversion",
+              "examples/batch-conversion",
+              "examples/multi-format",
+              "examples/figure-export",
+              "examples/table-export"
+            ]
+          },
+          {
+            "group": "Advanced Processing",
+            "pages": [
+              "examples/vlm-pipeline",
+              "examples/asr-pipeline",
+              "examples/full-page-ocr",
+              "examples/pii-detection",
+              "examples/translation"
+            ]
+          },
+          {
+            "group": "RAG & AI Workflows",
+            "pages": [
+              "examples/rag-langchain",
+              "examples/rag-llamaindex",
+              "examples/rag-haystack",
+              "examples/information-extraction",
+              "examples/chunking-serialization"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-format document parsing (PDF, DOCX, PPTX, XLSX, HTML, images, audio)",
+    "Advanced PDF understanding with layout analysis, table structure, and reading order",
+    "Unified DoclingDocument representation format",
+    "Multiple export formats (Markdown, HTML, JSON, WebVTT, DocTags)",
+    "OCR support for scanned documents and images",
+    "Visual Language Model (VLM) integration including GraniteDocling",
+    "Automatic Speech Recognition (ASR) for audio/video files",
+    "Information extraction and enrichment capabilities",
+    "GPU acceleration support",
+    "Native integrations with LangChain, LlamaIndex, Haystack, and Crew AI",
+    "MCP server for agentic applications",
+    "Plugin system for extensibility",
+    "CLI and Python API"
+  ],
+  "publicApiSurface": [
+    "DocumentConverter",
+    "DocumentConverter.convert()",
+    "ConversionResult",
+    "DoclingDocument",
+    "DoclingDocument.export_to_markdown()",
+    "DoclingDocument.export_to_html()",
+    "DoclingDocument.export_to_dict()",
+    "DoclingDocument.export_to_json()",
+    "PdfFormatOption",
+    "WordFormatOption",
+    "PowerpointFormatOption",
+    "ExcelFormatOption",
+    "HTMLFormatOption",
+    "ImageFormatOption",
+    "AudioFormatOption",
+    "PdfPipelineOptions",
+    "VlmPipelineOptions",
+    "AsrPipelineOptions",
+    "OcrOptions",
+    "TableStructureOptions",
+    "StandardPdfPipeline",
+    "SimplePipeline",
+    "VlmPipeline",
+    "AsrPipeline",
+    "PdfBackendOptions",
+    "AcceleratorOptions",
+    "HybridChunker",
+    "DoclingDocument.iterate_items()",
+    "docling (CLI command)",
+    "docling-tools (CLI command)"
+  ]
+}
